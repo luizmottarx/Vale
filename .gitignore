@@ -1,0 +1,11 @@
+# Ignorar arquivos de banco de dados
+Laboratorio_Geotecnia.db
+
+# Ignorar cache do Python
+__pycache__/
+
+# Ignorar arquivos CSV
+*.csv
+
+# Ignorar arquivos de script bat
+*.bat
