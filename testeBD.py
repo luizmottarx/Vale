@@ -2,6 +2,7 @@
 
 import sqlite3
 import pandas as pd
+import os
 
 def quote_identifier(s):
     return '"' + s.replace('"', '""') + '"'
@@ -13,6 +14,7 @@ class DatabaseManager:
 
     def create_tables(self):
         with self.conn:
+            # Tabela TipoEnsaio
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS TipoEnsaio (
                     id_tipo INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,6 +22,7 @@ class DatabaseManager:
                 )
             """)
 
+            # Tabela Amostra
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS Amostra (
                     id_amostra INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,6 +30,7 @@ class DatabaseManager:
                 )
             """)
 
+            # Tabela Ensaio
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS Ensaio (
                     id_ensaio INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,11 +41,12 @@ class DatabaseManager:
                     ensaio TEXT,
                     FOREIGN KEY (id_tipo) REFERENCES TipoEnsaio(id_tipo),
                     FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra),
-                    FOREIGN KEY (id_metadados) REFERENCES Metadados(id_metadados),
+                    FOREIGN KEY (id_metadados) REFERENCES MetadadosArquivo(id_metadados_arquivo),
                     UNIQUE (id_amostra, ensaio)
                 )
             """)
 
+            # Tabela EnsaiosTriaxiais
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS EnsaiosTriaxiais (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,49 +60,88 @@ class DatabaseManager:
                 )
             """)
 
+            # Tabela Metadados
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS Metadados (
                     id_metadados INTEGER PRIMARY KEY AUTOINCREMENT,
-                    metadados TEXT,
-                    valor_metadados TEXT,
-                    NomeCompleto TEXT,
-                    UNIQUE (NomeCompleto, metadados)
+                    metadados TEXT UNIQUE
                 )
             """)
 
-    def insert_metadados(self, nome_completo, metadados):
+            # Tabela MetadadosArquivo
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS MetadadosArquivo (
+                    id_metadados_arquivo INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id_metadados INTEGER,
+                    valor_metadados TEXT,
+                    NomeCompleto TEXT,
+                    FOREIGN KEY (id_metadados) REFERENCES Metadados(id_metadados)
+                )
+            """)
+
+    def insert_metadados_fixos(self, metadados_fixos):
         with self.conn:
-            for key, value in metadados.items():
-                if key:
-                    value = value if value else 'N/A'
-                    try:
-                        self.conn.execute("INSERT INTO Metadados (metadados, valor_metadados, NomeCompleto) VALUES (?, ?, ?)", 
-                                          (key, value, nome_completo))
-                    except sqlite3.IntegrityError:
-                        continue
-            cursor = self.conn.execute("SELECT id_metadados FROM Metadados WHERE NomeCompleto = ?", (nome_completo,))
-            return cursor.fetchone()[0]
+            for metadado in metadados_fixos:
+                self.conn.execute("INSERT OR IGNORE INTO Metadados (metadados) VALUES (?)", (metadado,))
+
+    def get_metadados_id(self, metadado):
+        cursor = self.conn.execute("SELECT id_metadados FROM Metadados WHERE metadados = ?", (metadado,))
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            raise ValueError(f"Metadado '{metadado}' não encontrado na tabela Metadados.")
+
+    def insert_metadados_arquivo(self, nome_completo, metadados):
+        with self.conn:
+            for metadado_nome, valor in metadados.items():
+                try:
+                    id_metadados = self.get_metadados_id(metadado_nome)
+                    self.conn.execute("""
+                        INSERT INTO MetadadosArquivo (id_metadados, valor_metadados, NomeCompleto)
+                        VALUES (?, ?, ?)
+                    """, (id_metadados, valor, nome_completo))
+                except ValueError as ve:
+                    print(ve)
+                    continue  # Ignorar metadados que não estão na tabela Metadados
+
+            # Obter id_metadados_arquivo para uso posterior
+            cursor = self.conn.execute("""
+                SELECT id_metadados_arquivo FROM MetadadosArquivo
+                WHERE NomeCompleto = ? LIMIT 1
+            """, (nome_completo,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            else:
+                raise ValueError(f"Não foi possível obter id_metadados_arquivo para NomeCompleto '{nome_completo}'.")
 
     def insert_tipo_ensaio(self, tipo):
-        tipo_formatado = '_'.join(tipo.split('_')[:2])
         with self.conn:
-            cursor = self.conn.execute("INSERT OR IGNORE INTO TipoEnsaio (tipo) VALUES (?)", (tipo_formatado,))
-            return cursor.lastrowid if cursor.lastrowid != 0 else self.get_tipo_id(tipo_formatado)
+            cursor = self.conn.execute("INSERT OR IGNORE INTO TipoEnsaio (tipo) VALUES (?)", (tipo,))
+            return cursor.lastrowid if cursor.lastrowid != 0 else self.get_tipo_id(tipo)
 
     def insert_amostra(self, amostra):
         with self.conn:
             cursor = self.conn.execute("INSERT OR IGNORE INTO Amostra (amostra) VALUES (?)", (amostra,))
             return cursor.lastrowid if cursor.lastrowid != 0 else self.get_amostra_id(amostra)
 
-    def insert_ensaio(self, id_tipo, id_amostra, id_metadados, nome_completo):
-        ensaio = nome_completo.split('_')[-1].split('.')[0]
+    def insert_ensaio(self, id_tipo, id_amostra, id_metadados_arquivo, nome_completo, ensaio):
         with self.conn:
             try:
-                cursor = self.conn.execute("INSERT INTO Ensaio (id_tipo, id_amostra, id_metadados, NomeCompleto, ensaio) VALUES (?, ?, ?, ?, ?)", 
-                                           (id_tipo, id_amostra, id_metadados, nome_completo, ensaio))
+                cursor = self.conn.execute("""
+                    INSERT INTO Ensaio (id_tipo, id_amostra, id_metadados, NomeCompleto, ensaio)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (id_tipo, id_amostra, id_metadados_arquivo, nome_completo, ensaio))
                 return cursor.lastrowid
             except sqlite3.IntegrityError:
-                print(f"Ensaio '{ensaio}' já existe para a amostra '{id_amostra}'.")
+                cursor = self.conn.execute("SELECT amostra FROM Amostra WHERE id_amostra = ?", (id_amostra,))
+                result = cursor.fetchone()
+                if result:
+                    amostra_str = result[0]
+                else:
+                    amostra_str = str(id_amostra)
+                print(f"Ensaio '{ensaio}' já existe para a amostra '{amostra_str}'.")
                 return None
 
     def insert_ensaios_triaxiais(self, id_ensaio, id_amostra, id_tipo, nome_completo, data):
@@ -144,16 +188,35 @@ def safe_float_conversion(value):
 def process_file_for_db(df, nome_completo, metadados):
     db_manager = DatabaseManager('C:/Users/lgv_v/Documents/LUIZ/Laboratorio_Geotecnia.db')
 
-    id_metadados = db_manager.insert_metadados(nome_completo, metadados)
-    
-    tipo = '_'.join(nome_completo.split('_')[:2])
-    amostra = nome_completo.split('_')[2]
-    
+    # Inserir metadados fixos
+    metadados_fixos = {
+        "_B", "_ad", "_cis", "w_0", "w_f", "h_init", "d_init", "ram_diam", "spec_grav",
+        "job_ref", "borehole", "samp_name", "depth", "samp_date", "samp_desc", "init_mass", "init_dry_mass",
+        "spec_grav_am", "test_start", "test_end", "spec_type", "top_drain", "base_drain", "side_drains",
+        "fin_mass", "fin_dry_mass", "mach_no", "press_sys", "cell_no", "ring_no", "job_loc", "mem_thick",
+        "test_no", "tech_name", "liq_lim", "plas_lim", "avg_wc_trim", "notes", "mass_no4", "mass_no10",
+        "mass_no40", "mass_no200", "mass_silt", "mass_clay", "mass_coll", "trim_proc", "moist_cond",
+        "ax_stress_inund", "water_desc", "test_meth", "interp_cv", "astm_dep", "wc_obt", "sat_meth",
+        "post_consol_area", "fail_crit", "load_filt_paper", "filt_paper_cov", "young_mod_mem", "test_time",
+        "test_date", "start_rep_data"
+    }
+    db_manager.insert_metadados_fixos(metadados_fixos)
+
+    # Inserir metadados relacionados ao arquivo
+    id_metadados_arquivo = db_manager.insert_metadados_arquivo(nome_completo, metadados)
+
+    # Extrair as partes do nome do arquivo
+    base_nome = os.path.basename(nome_completo)
+    nome_partes = os.path.splitext(base_nome)[0].split('_')
+    amostra = nome_partes[0]
+    tipo = '_'.join(nome_partes[1:-1])
+    ensaio = nome_partes[-1]
+
     id_tipo = db_manager.insert_tipo_ensaio(tipo)
     id_amostra = db_manager.insert_amostra(amostra)
 
-    id_ensaio = db_manager.insert_ensaio(id_tipo, id_amostra, id_metadados, nome_completo)
-    
+    id_ensaio = db_manager.insert_ensaio(id_tipo, id_amostra, id_metadados_arquivo, nome_completo, ensaio)
+
     if id_ensaio:
         for col in df.columns:
             df[col] = df[col].apply(safe_float_conversion)
