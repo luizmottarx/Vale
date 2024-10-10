@@ -43,13 +43,11 @@ class DatabaseManager:
                     id_ensaio INTEGER PRIMARY KEY AUTOINCREMENT,
                     id_tipo INTEGER,
                     id_amostra INTEGER,
-                    id_metadados INTEGER,
                     NomeCompleto TEXT,
                     ensaio TEXT,
                     login_usuario TEXT,
                     FOREIGN KEY (id_tipo) REFERENCES TipoEnsaio(id_tipo),
                     FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra),
-                    FOREIGN KEY (id_metadados) REFERENCES Metadados(id_metadados),
                     FOREIGN KEY (login_usuario) REFERENCES usuarios(login)
                 )
             """)
@@ -71,6 +69,52 @@ class DatabaseManager:
             self.conn.execute("DELETE FROM usuarios WHERE login = ?", (login,))
             messagebox.showinfo("Sucesso", f"Usuário '{login}' foi excluído com sucesso.")
 
+    def get_amostras(self):
+        cursor = self.conn.execute("SELECT amostra FROM Amostra")
+        return [row[0] for row in cursor.fetchall()]
+
+    def get_ensaios_by_amostra(self, amostra):
+        cursor = self.conn.execute("SELECT id_amostra FROM Amostra WHERE amostra = ?", (amostra,))
+        row = cursor.fetchone()
+        if row:
+            id_amostra = row[0]
+            cursor = self.conn.execute("SELECT NomeCompleto FROM Ensaio WHERE id_amostra = ?", (id_amostra,))
+            return [row[0] for row in cursor.fetchall()]
+        else:
+            return []
+
+    def get_data_for_amostra(self, amostra):
+        cursor = self.conn.execute("""
+            SELECT et.*
+            FROM EnsaiosTriaxiais et
+            JOIN Ensaio e ON et.id_ensaio = e.id_ensaio
+            JOIN Amostra a ON e.id_amostra = a.id_amostra
+            WHERE a.amostra = ?
+        """, (amostra,))
+        columns = [description[0] for description in cursor.description]
+        data = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return data
+
+    def get_data_for_file(self, nome_completo):
+        cursor = self.conn.execute("""
+            SELECT et.*
+            FROM EnsaiosTriaxiais et
+            JOIN Ensaio e ON et.id_ensaio = e.id_ensaio
+            WHERE e.NomeCompleto = ?
+        """, (nome_completo,))
+        columns = [description[0] for description in cursor.description]
+        data = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return data
+
+    def get_metadata_for_file(self, nome_completo):
+        cursor = self.conn.execute("""
+            SELECT m.metadados, ma.valor_metadados
+            FROM MetadadosArquivo ma
+            JOIN Metadados m ON ma.id_metadados = m.id_metadados
+            WHERE ma.NomeCompleto = ?
+        """, (nome_completo,))
+        return cursor.fetchall()
+
     def close(self):
         self.conn.close()
 
@@ -87,6 +131,7 @@ class InterfaceApp:
         self.metadados = {}
         self.metadados_parte2 = None  # Adicionar este atributo
         self.terminal_output = ""  # Para armazenar a saída do terminal
+        self.logged_in_user = None  # Armazenar o usuário logado
 
         self.create_login_screen()
 
@@ -110,9 +155,11 @@ class InterfaceApp:
 
         if user == "admin" and password == "000":  # Verificação simples de admin
             self.user_type = "admin"
+            self.logged_in_user = user
             self.create_main_menu()
         elif self.verify_user_credentials(user, password):
             self.user_type = "user"
+            self.logged_in_user = user
             self.create_main_menu()
         else:
             messagebox.showerror("Erro", "Usuário ou senha incorretos!")
@@ -131,7 +178,142 @@ class InterfaceApp:
 
         tk.Button(self.root, text="Encontrar Arquivos", command=self.find_files).pack(pady=10)
         tk.Button(self.root, text="Upload de Arquivo .gds", command=self.upload_file).pack(pady=10)
+        tk.Button(self.root, text="Verificar Ensaio", command=self.verificar_ensaio_screen).pack(pady=10)
         tk.Button(self.root, text="Sair", command=self.root.quit).pack(pady=10)
+
+    def verificar_ensaio_screen(self):
+        self.clear_screen()
+        self.root.title("Verificar Ensaio")
+
+        amostras = self.db_manager.get_amostras()
+        if not amostras:
+            messagebox.showinfo("Informação", "Nenhuma amostra encontrada.")
+            self.create_main_menu()
+            return
+
+        tk.Label(self.root, text="Selecione uma amostra:").pack(pady=10)
+        self.amostra_listbox = tk.Listbox(self.root, width=80, height=20)
+        for amostra in amostras:
+            self.amostra_listbox.insert(tk.END, amostra)
+        self.amostra_listbox.pack()
+
+        tk.Button(self.root, text="Avançar", command=self.avancar_amostra).pack(pady=10)
+        tk.Button(self.root, text="Voltar ao Menu", command=self.create_main_menu).pack(pady=10)
+
+    def avancar_amostra(self):
+        selection = self.amostra_listbox.curselection()
+        if selection:
+            index = selection[0]
+            amostra_selecionada = self.amostra_listbox.get(index)
+            self.mostrar_ensaios_amostra(amostra_selecionada)
+        else:
+            messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
+
+    def mostrar_ensaios_amostra(self, amostra_selecionada):
+        self.clear_screen()
+        self.root.title(f"Arquivos da Amostra {amostra_selecionada}")
+
+        ensaios = self.db_manager.get_ensaios_by_amostra(amostra_selecionada)
+        if not ensaios:
+            messagebox.showinfo("Informação", "Nenhum ensaio encontrado para a amostra selecionada.")
+            self.verificar_ensaio_screen()
+            return
+
+        tk.Label(self.root, text=f"Arquivos encontrados para a amostra {amostra_selecionada}:").pack(pady=10)
+        self.ensaio_listbox = tk.Listbox(self.root, width=80, height=20)
+        for ensaio in ensaios:
+            self.ensaio_listbox.insert(tk.END, ensaio)
+        self.ensaio_listbox.pack()
+
+        tk.Button(self.root, text="Ver Gráficos", command=lambda: self.plotar_graficos_amostra(amostra_selecionada)).pack(pady=5)
+        tk.Button(self.root, text="Verificar Arquivo Individual", command=self.verificar_arquivo_individual).pack(pady=5)
+        tk.Button(self.root, text="Voltar", command=self.verificar_ensaio_screen).pack(pady=5)
+
+    def verificar_arquivo_individual(self):
+        selection = self.ensaio_listbox.curselection()
+        if selection:
+            index = selection[0]
+            arquivo_selecionado = self.ensaio_listbox.get(index)
+            self.mostrar_metadados_arquivo(arquivo_selecionado)
+        else:
+            messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
+
+    def mostrar_metadados_arquivo(self, arquivo_selecionado):
+        self.clear_screen()
+        self.root.title(f"Metadados do Arquivo {arquivo_selecionado}")
+
+        metadados = self.db_manager.get_metadata_for_file(arquivo_selecionado)
+        if not metadados:
+            messagebox.showinfo("Informação", "Nenhum metadado encontrado para o arquivo selecionado.")
+            self.mostrar_ensaios_amostra()
+            return
+
+        tk.Label(self.root, text=f"Metadados do Arquivo {arquivo_selecionado}:").pack(pady=10)
+        metadata_text = tk.Text(self.root, width=80, height=20)
+        for metadado, valor in metadados:
+            metadata_text.insert(tk.END, f"{metadado}: {valor}\n")
+        metadata_text.config(state=tk.DISABLED)
+        metadata_text.pack()
+
+        tk.Button(self.root, text="Ver Gráficos", command=lambda: self.plotar_graficos_arquivo(arquivo_selecionado)).pack(pady=5)
+        tk.Button(self.root, text="Sair", command=self.create_main_menu).pack(pady=5)
+
+    def plotar_graficos_amostra(self, amostra_selecionada):
+        data = self.db_manager.get_data_for_amostra(amostra_selecionada)
+        if not data:
+            messagebox.showinfo("Informação", "Nenhum dado encontrado para a amostra selecionada.")
+            return
+
+        self.plotar_graficos(data, f"Gráficos da Amostra {amostra_selecionada}")
+
+    def plotar_graficos_arquivo(self, arquivo_selecionado):
+        data = self.db_manager.get_data_for_file(arquivo_selecionado)
+        if not data:
+            messagebox.showinfo("Informação", "Nenhum dado encontrado para o arquivo selecionado.")
+            return
+
+        self.plotar_graficos(data, f"Gráficos do Arquivo {arquivo_selecionado}")
+
+    def plotar_graficos(self, data, title):
+        fig, axs = plt.subplots(3, 2, figsize=(12, 18))
+
+        for row in data:
+            eff_camb_A = float(row.get('eff_camb_A', 0))
+            void_ratio_A = float(row.get('void_ratio_A', 0))
+            eff_camb_B = float(row.get('eff_camb_B', 0))
+            void_ratio_B = float(row.get('void_ratio_B', 0))
+            dev_stress_A = float(row.get('dev_stress_A', 0))
+            dev_stress_B = float(row.get('dev_stress_B', 0))
+            nqp_A = float(row.get('nqp_A', 0))
+            nqp_B = float(row.get('nqp_B', 0))
+            ax_strain = float(row.get('ax_strain', 0))
+
+            # Plotting each data point
+            axs[0, 0].scatter(eff_camb_A, void_ratio_A, color='blue')
+            axs[0, 1].scatter(eff_camb_B, void_ratio_B, color='green')
+            axs[1, 0].scatter(eff_camb_A, dev_stress_A, color='red')
+            axs[1, 1].scatter(eff_camb_B, dev_stress_B, color='orange')
+            axs[2, 0].scatter(ax_strain, nqp_A, color='purple')
+            axs[2, 1].scatter(ax_strain, nqp_B, color='brown')
+
+        # Set titles
+        axs[0, 0].set_title('void_ratio_A * eff_camb_A')
+        axs[0, 1].set_title('void_ratio_B * eff_camb_B')
+        axs[1, 0].set_title('dev_stress_A * eff_camb_A')
+        axs[1, 1].set_title('dev_stress_B * eff_camb_B')
+        axs[2, 0].set_title('nqp_A * ax_strain')
+        axs[2, 1].set_title('nqp_B * ax_strain')
+
+        plt.tight_layout()
+
+        graph_window = tk.Toplevel(self.root)
+        graph_window.title(title)
+
+        canvas_graph = FigureCanvasTkAgg(fig, master=graph_window)
+        canvas_graph.draw()
+        canvas_graph.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        tk.Button(graph_window, text="Sair", command=graph_window.destroy).pack(pady=10)
 
     def add_user_screen(self):
         self.clear_screen()
@@ -208,11 +390,11 @@ class InterfaceApp:
         if self.selected_file:
             directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
             file_path = os.path.join(directory, self.selected_file)
-            
+
             # Processamento do arquivo
             processor = FileProcessor(directory)
             self.metadados = processor.process_gds_file(file_path)  # Processa o arquivo com o teste1
-            
+
             if self.metadados:
                 self.metadados = StageProcessor.process_stage_data(directory, file_path, self.metadados)  # Processa o arquivo com o teste2
                 self.show_metadata_selection_screen()
@@ -282,8 +464,45 @@ class InterfaceApp:
 
         # Obter o texto impresso
         self.terminal_output = mystdout.getvalue()
-        
+
+        # Salvar metadados no banco de dados
+        self.save_to_database()
+
         self.show_save_status()
+
+    def save_to_database(self):
+        # Inserir ou recuperar id_tipo
+        tipo_ensaio = self.metadados.get('TipoEnsaio', 'Desconhecido')
+        cursor = self.db_manager.conn.cursor()
+        cursor.execute("SELECT id_tipo FROM TipoEnsaio WHERE tipo = ?", (tipo_ensaio,))
+        row = cursor.fetchone()
+        if row:
+            id_tipo = row[0]
+        else:
+            cursor.execute("INSERT INTO TipoEnsaio (tipo) VALUES (?)", (tipo_ensaio,))
+            id_tipo = cursor.lastrowid
+
+        # Inserir ou recuperar id_amostra
+        amostra = self.metadados.get('Amostra', 'Desconhecida')
+        cursor.execute("SELECT id_amostra FROM Amostra WHERE amostra = ?", (amostra,))
+        row = cursor.fetchone()
+        if row:
+            id_amostra = row[0]
+        else:
+            cursor.execute("INSERT INTO Amostra (amostra) VALUES (?)", (amostra,))
+            id_amostra = cursor.lastrowid
+
+        # Inserir Ensaio
+        nome_completo = self.selected_file
+        ensaio = self.metadados.get('Ensaio', 'Desconhecido')
+        login_usuario = self.logged_in_user  # Usuário logado
+
+        cursor.execute("""
+            INSERT INTO Ensaio (id_tipo, id_amostra, NomeCompleto, ensaio, login_usuario)
+            VALUES (?, ?, ?, ?, ?)
+        """, (id_tipo, id_amostra, nome_completo, ensaio, login_usuario))
+
+        self.db_manager.conn.commit()
 
     def show_save_status(self):
         self.clear_screen()
@@ -342,7 +561,7 @@ class InterfaceApp:
             canvas = tk.Canvas(graph_window)
             scroll_y = tk.Scrollbar(graph_window, orient="vertical", command=canvas.yview)
             scroll_frame = tk.Frame(canvas)
-            
+
             # Configurar o canvas com o frame
             scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
             canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
@@ -415,8 +634,6 @@ class InterfaceApp:
 
         except KeyError as e:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
-
-
 
     def upload_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("GDS files", "*.gds")])
