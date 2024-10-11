@@ -1,4 +1,3 @@
-# interface.py
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
 from tkinter import messagebox, filedialog
@@ -11,7 +10,6 @@ from teste1 import FileProcessor
 from teste2 import StageProcessor
 from teste3 import TableProcessor, CisalhamentoData
 
-# Classe para gerenciar o banco de dados, incluindo a tabela de usuários
 class DatabaseManager:
     def __init__(self, db_name='C:/Users/lgv_v/Documents/LUIZ/Laboratorio_Geotecnia.db'):
         self.conn = sqlite3.connect(db_name)
@@ -43,12 +41,10 @@ class DatabaseManager:
                     id_ensaio INTEGER PRIMARY KEY AUTOINCREMENT,
                     id_tipo INTEGER,
                     id_amostra INTEGER,
-                    NomeCompleto TEXT,
+                    NomeCompleto TEXT UNIQUE,
                     ensaio TEXT,
-                    login_usuario TEXT,
                     FOREIGN KEY (id_tipo) REFERENCES TipoEnsaio(id_tipo),
-                    FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra),
-                    FOREIGN KEY (login_usuario) REFERENCES usuarios(login)
+                    FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra)
                 )
             """)
 
@@ -118,7 +114,6 @@ class DatabaseManager:
     def close(self):
         self.conn.close()
 
-# Interface principal do aplicativo
 class InterfaceApp:
     def __init__(self, root):
         self.root = root
@@ -126,12 +121,12 @@ class InterfaceApp:
         self.root.geometry("600x600")
         self.root.resizable(False, False)
         self.db_manager = DatabaseManager()
-        self.user_type = None  # Para verificar se o usuário é admin ou não
+        self.user_type = None
         self.selected_file = None
         self.metadados = {}
-        self.metadados_parte2 = None  # Adicionar este atributo
-        self.terminal_output = ""  # Para armazenar a saída do terminal
-        self.logged_in_user = None  # Armazenar o usuário logado
+        self.metadados_parte2 = None
+        self.terminal_output = ""
+        self.logged_in_user = None
 
         self.create_login_screen()
 
@@ -153,7 +148,7 @@ class InterfaceApp:
         user = self.user_entry.get()
         password = self.password_entry.get()
 
-        if user == "admin" and password == "000":  # Verificação simples de admin
+        if user == "admin" and password == "000":
             self.user_type = "admin"
             self.logged_in_user = user
             self.create_main_menu()
@@ -288,7 +283,6 @@ class InterfaceApp:
             nqp_B = float(row.get('nqp_B', 0))
             ax_strain = float(row.get('ax_strain', 0))
 
-            # Plotting each data point
             axs[0, 0].scatter(eff_camb_A, void_ratio_A, color='blue')
             axs[0, 1].scatter(eff_camb_B, void_ratio_B, color='green')
             axs[1, 0].scatter(eff_camb_A, dev_stress_A, color='red')
@@ -296,7 +290,6 @@ class InterfaceApp:
             axs[2, 0].scatter(ax_strain, nqp_A, color='purple')
             axs[2, 1].scatter(ax_strain, nqp_B, color='brown')
 
-        # Set titles
         axs[0, 0].set_title('void_ratio_A * eff_camb_A')
         axs[0, 1].set_title('void_ratio_B * eff_camb_B')
         axs[1, 0].set_title('dev_stress_A * eff_camb_A')
@@ -370,20 +363,35 @@ class InterfaceApp:
         self.root.title("Arquivos Encontrados")
 
         directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
-        files = [f for f in os.listdir(directory) if f.endswith('.gds')]
+        all_files = [f for f in os.listdir(directory) if f.endswith('.gds')]
 
-        if not files:
+        if not all_files:
             messagebox.showinfo("Informação", "Nenhum arquivo .gds encontrado.")
             self.create_main_menu()
             return
 
+        # Verificar no banco de dados quais arquivos já existem
+        cursor = self.db_manager.conn.cursor()
+        cursor.execute("SELECT NomeCompleto FROM Ensaio")
+        arquivos_salvos = {row[0] for row in cursor.fetchall()}  # Conjunto de arquivos já salvos
+
+        # Filtrar apenas os arquivos que ainda não estão no banco de dados
+        arquivos_nao_salvos = [f for f in all_files if f not in arquivos_salvos]
+
+        if not arquivos_nao_salvos:
+            messagebox.showinfo("Informação", "Todos os arquivos .gds da pasta já foram salvos no banco de dados.")
+            self.create_main_menu()
+            return
+
+        # Exibir os arquivos que ainda não foram salvos
         tk.Label(self.root, text="Selecione um arquivo:").pack(pady=10)
-        self.file_var = tk.StringVar(value=files)
+        self.file_var = tk.StringVar(value=arquivos_nao_salvos)
         self.file_listbox = tk.Listbox(self.root, listvariable=self.file_var, width=80, height=20)
         self.file_listbox.pack()
 
         tk.Button(self.root, text="Selecionar", command=self.select_file).pack(pady=10)
         tk.Button(self.root, text="Voltar", command=self.create_main_menu).pack(pady=10)
+
 
     def select_file(self):
         self.selected_file = self.file_listbox.get(tk.ACTIVE)
@@ -391,12 +399,11 @@ class InterfaceApp:
             directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
             file_path = os.path.join(directory, self.selected_file)
 
-            # Processamento do arquivo
             processor = FileProcessor(directory)
-            self.metadados = processor.process_gds_file(file_path)  # Processa o arquivo com o teste1
+            self.metadados = processor.process_gds_file(file_path)
 
             if self.metadados:
-                self.metadados = StageProcessor.process_stage_data(directory, file_path, self.metadados)  # Processa o arquivo com o teste2
+                self.metadados = StageProcessor.process_stage_data(directory, file_path, self.metadados)
                 self.show_metadata_selection_screen()
             else:
                 messagebox.showerror("Erro", "Falha ao processar o arquivo.")
@@ -452,57 +459,62 @@ class InterfaceApp:
         directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
         file_path = os.path.join(directory, self.selected_file)
 
-        # Capturar a saída do terminal
         old_stdout = sys.stdout
         sys.stdout = mystdout = io.StringIO()
 
-        # Processa o arquivo com o teste3 e captura metadados_parte2
         self.metadados_parte2 = TableProcessor.process_table_data(self.metadados, file_path)
 
-        # Restaurar stdout
         sys.stdout = old_stdout
 
-        # Obter o texto impresso
         self.terminal_output = mystdout.getvalue()
 
-        # Salvar metadados no banco de dados
         self.save_to_database()
 
         self.show_save_status()
 
     def save_to_database(self):
-        # Inserir ou recuperar id_tipo
-        tipo_ensaio = self.metadados.get('TipoEnsaio', 'Desconhecido')
         cursor = self.db_manager.conn.cursor()
-        cursor.execute("SELECT id_tipo FROM TipoEnsaio WHERE tipo = ?", (tipo_ensaio,))
-        row = cursor.fetchone()
-        if row:
-            id_tipo = row[0]
+
+        # Extrair 'Amostra', 'TipoEnsaio' e 'Ensaio' do nome do arquivo
+        base_nome = os.path.basename(self.selected_file)
+        nome_partes = os.path.splitext(base_nome)[0].split('_')
+
+        if len(nome_partes) >= 3:
+            amostra = nome_partes[0]
+            tipo_ensaio = '_'.join(nome_partes[1:-1])
+            ensaio = nome_partes[-1]
         else:
-            cursor.execute("INSERT INTO TipoEnsaio (tipo) VALUES (?)", (tipo_ensaio,))
-            id_tipo = cursor.lastrowid
+            amostra = 'Desconhecida'
+            tipo_ensaio = 'Desconhecido'
+            ensaio = 'Desconhecido'
+
+        # Verificar se o NomeCompleto já existe na tabela Ensaio
+        cursor.execute("SELECT NomeCompleto FROM Ensaio WHERE NomeCompleto = ?", (self.selected_file,))
+        ensaio_existente = cursor.fetchone()
+
+        # Se o arquivo já existe, interromper o processo sem exibir pop-up
+        if ensaio_existente:
+            return  # Não prosseguir com o salvamento se o arquivo já existe
 
         # Inserir ou recuperar id_amostra
-        amostra = self.metadados.get('Amostra', 'Desconhecida')
+        cursor.execute("INSERT OR IGNORE INTO Amostra (amostra) VALUES (?)", (amostra,))
         cursor.execute("SELECT id_amostra FROM Amostra WHERE amostra = ?", (amostra,))
-        row = cursor.fetchone()
-        if row:
-            id_amostra = row[0]
-        else:
-            cursor.execute("INSERT INTO Amostra (amostra) VALUES (?)", (amostra,))
-            id_amostra = cursor.lastrowid
+        id_amostra = cursor.fetchone()[0]
 
-        # Inserir Ensaio
-        nome_completo = self.selected_file
-        ensaio = self.metadados.get('Ensaio', 'Desconhecido')
-        login_usuario = self.logged_in_user  # Usuário logado
+        # Inserir ou recuperar id_tipo
+        cursor.execute("INSERT OR IGNORE INTO TipoEnsaio (tipo) VALUES (?)", (tipo_ensaio,))
+        cursor.execute("SELECT id_tipo FROM TipoEnsaio WHERE tipo = ?", (tipo_ensaio,))
+        id_tipo = cursor.fetchone()[0]
 
+        # Inserir o novo registro no banco de dados
         cursor.execute("""
-            INSERT INTO Ensaio (id_tipo, id_amostra, NomeCompleto, ensaio, login_usuario)
-            VALUES (?, ?, ?, ?, ?)
-        """, (id_tipo, id_amostra, nome_completo, ensaio, login_usuario))
+            INSERT INTO Ensaio (id_tipo, id_amostra, NomeCompleto, ensaio)
+            VALUES (?, ?, ?, ?)
+        """, (id_tipo, id_amostra, self.selected_file, ensaio))
 
+        # Commit das alterações
         self.db_manager.conn.commit()
+
 
     def show_save_status(self):
         self.clear_screen()
@@ -510,7 +522,6 @@ class InterfaceApp:
 
         tk.Label(self.root, text="Dados processados e salvos no banco de dados!").pack(pady=10)
 
-        # Exibir o output capturado
         if self.terminal_output:
             tk.Label(self.root, text="Valores dos metadados calculados:").pack(pady=10)
 
@@ -518,7 +529,7 @@ class InterfaceApp:
             text_widget.pack(pady=10)
 
             text_widget.insert(tk.END, self.terminal_output)
-            text_widget.config(state=tk.DISABLED)  # Tornar o Text widget somente leitura
+            text_widget.config(state=tk.DISABLED)
         else:
             tk.Label(self.root, text="Não foi possível obter os metadados calculados.").pack(pady=10)
 
@@ -532,10 +543,8 @@ class InterfaceApp:
             return
 
         try:
-            # Filtrar os dados do estágio de cisalhamento dinamicamente
             cisalhamento_data = CisalhamentoData(self.metadados_parte2.df, self.metadados)
 
-            # Recuperar os dados necessários para os gráficos
             dados_cisalhamento = cisalhamento_data.get_cisalhamento_data()
             ax_strain = dados_cisalhamento['ax_strain']
             dev_stress_A = dados_cisalhamento['dev_stress_A']
@@ -552,17 +561,14 @@ class InterfaceApp:
             m_A = dados_cisalhamento['m_A']
             m_B = dados_cisalhamento['m_B']
 
-            # Criar janela de gráficos
             graph_window = tk.Toplevel(self.root)
             graph_window.title("Gráficos de Dispersão")
             graph_window.geometry("1280x960")
 
-            # Criar um frame principal com barra de rolagem
             canvas = tk.Canvas(graph_window)
             scroll_y = tk.Scrollbar(graph_window, orient="vertical", command=canvas.yview)
             scroll_frame = tk.Frame(canvas)
 
-            # Configurar o canvas com o frame
             scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
             canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
             canvas.configure(yscrollcommand=scroll_y.set)
@@ -570,64 +576,49 @@ class InterfaceApp:
             canvas.pack(side="left", fill="both", expand=True)
             scroll_y.pack(side="right", fill="y")
 
-            # Criar os gráficos
-            fig, axs = plt.subplots(7, 2, figsize=(19.2, 21.6))  # Set the size to allow more space vertically
+            fig, axs = plt.subplots(7, 2, figsize=(19.2, 21.6))
 
-            # Primeiro gráfico: dev_stress_A * ax_strain
             axs[0, 0].scatter(ax_strain, dev_stress_A)
             axs[0, 0].set_title('dev_stress_A * ax_strain')
 
-            # Segundo gráfico: dev_stress_B * ax_strain
             axs[0, 1].scatter(ax_strain, dev_stress_B)
             axs[0, 1].set_title('dev_stress_B * ax_strain')
 
-            # Terceiro gráfico: du_kpa_A * ax_strain
             axs[1, 0].scatter(ax_strain, du_kpa_A)
             axs[1, 0].set_title('du_kpa_A * ax_strain')
 
-            # Quarto gráfico: du_kpa_B * ax_strain
             axs[1, 1].scatter(ax_strain, du_kpa_B)
             axs[1, 1].set_title('du_kpa_B * ax_strain')
 
-            # Quinto gráfico: dev_stress_A * eff_camb_A
             axs[2, 0].scatter(eff_camb_A, dev_stress_A)
             axs[2, 0].set_title('dev_stress_A * eff_camb_A')
 
-            # Sexto gráfico: dev_stress_B * eff_camb_B
             axs[2, 1].scatter(eff_camb_B, dev_stress_B)
             axs[2, 1].set_title('dev_stress_B * eff_camb_B')
 
-            # Sétimo gráfico: vol_strain * ax_strain
             axs[3, 0].scatter(ax_strain, vol_strain)
             axs[3, 0].set_title('vol_strain * ax_strain')
 
-            # Oitavo gráfico: void_ratio_A * eff_camb_A
             axs[3, 1].scatter(eff_camb_A, void_ratio_A)
             axs[3, 1].set_title('void_ratio_A * eff_camb_A')
 
-            # Nono gráfico: void_ratio_B * eff_camb_B
             axs[4, 0].scatter(eff_camb_B, void_ratio_B)
             axs[4, 0].set_title('void_ratio_B * eff_camb_B')
 
-            # Décimo gráfico: nqp_A * ax_strain
             axs[4, 1].scatter(ax_strain, nqp_A)
             axs[4, 1].set_title('nqp_A * ax_strain')
 
-            # Décimo primeiro gráfico: nqp_B * ax_strain
             axs[5, 0].scatter(ax_strain, nqp_B)
             axs[5, 0].set_title('nqp_B * ax_strain')
 
-            # Décimo segundo gráfico: m_A * ax_strain
             axs[5, 1].scatter(ax_strain, m_A)
             axs[5, 1].set_title('m_A * ax_strain')
 
-            # Décimo terceiro gráfico: m_B * ax_strain
             axs[6, 0].scatter(ax_strain, m_B)
             axs[6, 0].set_title('m_B * ax_strain')
 
             plt.tight_layout()
 
-            # Converter o gráfico matplotlib para tkinter
             canvas_graph = FigureCanvasTkAgg(fig, master=scroll_frame)
             canvas_graph.draw()
             canvas_graph.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -640,9 +631,9 @@ class InterfaceApp:
         if file_path:
             directory = os.path.dirname(file_path)
             processor = FileProcessor(directory)
-            self.metadados = processor.process_gds_file(file_path)  # Processa o arquivo com o teste1
+            self.metadados = processor.process_gds_file(file_path)
             if self.metadados:
-                self.metadados = StageProcessor.process_stage_data(directory, file_path, self.metadados)  # Processa o arquivo com o teste2
+                self.metadados = StageProcessor.process_stage_data(directory, file_path, self.metadados)
                 self.selected_file = os.path.basename(file_path)
                 self.show_metadata_selection_screen()
             else:

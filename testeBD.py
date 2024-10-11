@@ -36,11 +36,10 @@ class DatabaseManager:
                     id_ensaio INTEGER PRIMARY KEY AUTOINCREMENT,
                     id_tipo INTEGER,
                     id_amostra INTEGER,
-                    NomeCompleto TEXT,
+                    NomeCompleto TEXT UNIQUE,
                     ensaio TEXT,
                     FOREIGN KEY (id_tipo) REFERENCES TipoEnsaio(id_tipo),
-                    FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra),
-                    UNIQUE (id_amostra, ensaio)
+                    FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra)
                 )
             """)
 
@@ -105,13 +104,23 @@ class DatabaseManager:
 
     def insert_tipo_ensaio(self, tipo):
         with self.conn:
-            cursor = self.conn.execute("INSERT OR IGNORE INTO TipoEnsaio (tipo) VALUES (?)", (tipo,))
-            return cursor.lastrowid if cursor.lastrowid != 0 else self.get_tipo_id(tipo)
+            self.conn.execute("INSERT OR IGNORE INTO TipoEnsaio (tipo) VALUES (?)", (tipo,))
+            cursor = self.conn.execute("SELECT id_tipo FROM TipoEnsaio WHERE tipo = ?", (tipo,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            else:
+                return None
 
     def insert_amostra(self, amostra):
         with self.conn:
-            cursor = self.conn.execute("INSERT OR IGNORE INTO Amostra (amostra) VALUES (?)", (amostra,))
-            return cursor.lastrowid if cursor.lastrowid != 0 else self.get_amostra_id(amostra)
+            self.conn.execute("INSERT OR IGNORE INTO Amostra (amostra) VALUES (?)", (amostra,))
+            cursor = self.conn.execute("SELECT id_amostra FROM Amostra WHERE amostra = ?", (amostra,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            else:
+                return None
 
     def insert_ensaio(self, id_tipo, id_amostra, nome_completo, ensaio):
         with self.conn:
@@ -122,14 +131,15 @@ class DatabaseManager:
                 """, (id_tipo, id_amostra, nome_completo, ensaio))
                 return cursor.lastrowid
             except sqlite3.IntegrityError:
-                cursor = self.conn.execute("SELECT amostra FROM Amostra WHERE id_amostra = ?", (id_amostra,))
+                cursor = self.conn.execute("SELECT id_ensaio FROM Ensaio WHERE NomeCompleto = ?", (nome_completo,))
                 result = cursor.fetchone()
                 if result:
-                    amostra_str = result[0]
+                    id_ensaio = result[0]
+                    print(f"Ensaio com NomeCompleto '{nome_completo}' já existe.")
+                    return id_ensaio
                 else:
-                    amostra_str = str(id_amostra)
-                print(f"Ensaio '{ensaio}' já existe para a amostra '{amostra_str}'.")
-                return None
+                    print(f"Ensaio com NomeCompleto '{nome_completo}' já existe, mas não foi possível recuperar id_ensaio.")
+                    return None
 
     def insert_ensaios_triaxiais(self, id_ensaio, id_amostra, id_tipo, nome_completo, data):
         with self.conn:
@@ -183,7 +193,6 @@ def safe_float_conversion(value):
 def process_file_for_db(df, nome_completo, metadados):
     db_manager = DatabaseManager('C:/Users/lgv_v/Documents/LUIZ/Laboratorio_Geotecnia.db')
 
-    # Inserir metadados fixos
     metadados_fixos = {
         "_B", "_ad", "_cis", "w_0", "w_f", "h_init", "d_init", "ram_diam", "spec_grav",
         "job_ref", "borehole", "samp_name", "depth", "samp_date", "samp_desc", "init_mass", "init_dry_mass",
@@ -197,10 +206,8 @@ def process_file_for_db(df, nome_completo, metadados):
     }
     db_manager.insert_metadados_fixos(metadados_fixos)
 
-    # Inserir metadados relacionados ao arquivo
     db_manager.insert_metadados_arquivo(nome_completo, metadados)
 
-    # Extrair as partes do nome do arquivo
     base_nome = os.path.basename(nome_completo)
     nome_partes = os.path.splitext(base_nome)[0].split('_')
     amostra = nome_partes[0]
