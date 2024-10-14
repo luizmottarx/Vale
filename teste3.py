@@ -219,7 +219,20 @@ class TableProcessor:
             df['m_A'] = metadados_parte2.vol_solid / df['void_ratio_A']
             df['m_B'] = metadados_parte2.vol_solid / df['void_ratio_B']
 
+            df['shear_strain'] = df['dev_stress_A'] / df['eff_ax_stress_A']
 
+            df['diameter_A'] = 2 * np.sqrt(df['cur_area_A'] / np.pi)
+            df['diameter_B'] = 2 * np.sqrt(df['cur_area_B'] / np.pi)
+
+            df['b_val'] = np.where(
+            df['stage_no'] == B_stage,
+            (metadados_parte2.rad_press_0 - df['rad_press']) / (metadados_parte2.pore_press_0 - df['pore_press_Original']),
+            "null")
+
+            df['avg_eff_stress_A'] = (df['eff_ax_stress_A'] + df['eff_rad_stress']) / 2
+            df['avg_eff_stress_B'] = (df['eff_ax_stress_B'] + df['eff_rad_stress']) / 2
+
+            df['avg_mean_stress'] = (df['ax_stress'] + df['rad_press']) / 2
 
             # Salvar no banco de dados
             process_file_for_db(df, os.path.basename(gds_file), metadados)
@@ -264,7 +277,10 @@ class CisalhamentoData:
         self.m_A = self.df_cisalhamento['m_A']
         self.m_B = self.df_cisalhamento['m_B']
 
-#     
+#       void_ratio_A * eff_camb_A e void_ratio_B *  eff_camb_B. ok
+#       dev_stress_A * eff_camb_A e dev_stress_B *  eff_camb_B. ok
+#       nqp_A        * ax_strain e nqp_B         *  ax_strain.  ok
+
     def get_cisalhamento_data(self):
         return {
             "ax_strain": self.ax_strain,

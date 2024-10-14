@@ -1,7 +1,4 @@
-# testeBD.py
-
 import sqlite3
-import pandas as pd
 import os
 
 def quote_identifier(s):
@@ -143,14 +140,35 @@ class DatabaseManager:
 
     def insert_ensaios_triaxiais(self, id_ensaio, id_amostra, id_tipo, nome_completo, data):
         with self.conn:
+            # Lista de colunas desejadas
+            colunas_desejadas = [
+                'stage_no', 'time_test_start', 'time_stage_start', 'rad_press_Original', 'rad_vol_Original',
+                'back_press_Original', 'back_vol_Original', 'load_cell_Original', 'pore_press_Original',
+                'ax_disp_Original', 'ax_force_Original', 'ax_strain_Original', 'avg_diam_chg_Original',
+                'rad_strain_Original', 'ax_strain_Original_2', 'eff_ax_stress_Original', 'eff_rad_stress_Original',
+                'dev_stress_Original', 'total_stress_rat_Original', 'eff_stress_rat_Original', 'cur_area_Original',
+                'shear_strain_Original', 'camb_p_A', 'eff_camb_p_Original', 'max_shear_stress_Original',
+                'vol_change_Original', 'b_value_Original', 'mean_stress_Original', 'ax_force', 'rad_vol_delta',
+                'rad_vol', 'rad_press', 'back_press', 'back_vol_delta', 'back_vol', 'ax_disp', 'ax_disp_delta',
+                'cur_area_A', 'cur_area_B', 'diameter_A', 'diameter_B', 'rad_strain_A', 'rad_strain_B', 'height',
+                'vol_A', 'vol_B', 'void_ratio_A', 'void_ratio_B', 'load', 'ax_strain', 'vol_strain', 'ax_stress',
+                'eff_ax_stress_A', 'eff_ax_stress_B', 'eff_rad_stress', 'dev_stress_A', 'dev_stress_B',
+                'eff_stress_rat_A', 'eff_stress_rat_B', 'shear_strain', 'camb_p_A', 'camb_p_B', 'eff_camb_p_A',
+                'eff_camb_p_B', 'max_shear_stress_A', 'max_shear_stress_B', 'avg_mean_stress', 'avg_eff_stress_A',
+                'avg_eff_stress_B', 'b_val', 'excessPWP', 'du_kpa_A', 'du_kpa_B', 'nqp_A', 'nqp_B', 'm_A', 'm_B'
+            ]
+
+            # Filtrar apenas as colunas desejadas
+            filtered_data = {col: data[col] for col in colunas_desejadas if col in data}
+
             existing_columns = self.get_existing_columns('EnsaiosTriaxiais')
-            new_columns = [col for col in data.keys() if col not in existing_columns]
+            new_columns = [col for col in filtered_data.keys() if col not in existing_columns]
             for col in new_columns:
                 col_quoted = quote_identifier(col)
                 self.conn.execute(f"ALTER TABLE EnsaiosTriaxiais ADD COLUMN {col_quoted} TEXT")
 
-            for i in range(len(data['stage_no'])):
-                row_data = {key: (data[key][i] if data[key][i] is not None else 0) for key in data.keys()}
+            for i in range(len(filtered_data['stage_no'])):
+                row_data = {key: (filtered_data[key][i] if filtered_data[key][i] is not None else 0) for key in filtered_data.keys()}
                 placeholders = ", ".join(["?"] * len(row_data))
                 columns = ", ".join([quote_identifier(key) for key in row_data.keys()])
                 self.conn.execute(
