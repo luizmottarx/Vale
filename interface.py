@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from teste1 import FileProcessor
 from teste2 import StageProcessor
 from teste3 import TableProcessor, CisalhamentoData
+import random
 
 class DatabaseManager:
     def __init__(self, db_name='C:/Users/lgv_v/Documents/LUIZ/Laboratorio_Geotecnia.db'):
@@ -514,12 +515,145 @@ class InterfaceApp:
 
     # Funções de Plotagem de Gráficos Unificadas
     def plotar_graficos_amostra(self, amostra_selecionada):
-        data = self.db_manager.get_data_for_amostra(amostra_selecionada)
-        if not data:
-            messagebox.showinfo("Informação", "Nenhum dado encontrado para a amostra selecionada.")
-            return
+        try:
+            # Obter os dados de todos os arquivos da amostra
+            data = self.db_manager.get_data_for_amostra(amostra_selecionada)
+            if not data:
+                messagebox.showinfo("Informação", "Nenhum dado encontrado para a amostra selecionada.")
+                return
 
-        self.plotar_graficos(data, f"Gráficos da Amostra {amostra_selecionada}")
+            # Inicializar listas para cada par de dados
+            void_ratio_A = {}
+            void_ratio_B = {}
+            eff_camb_A = {}
+            eff_camb_B = {}
+            dev_stress_A = {}
+            dev_stress_B = {}
+            nqp_A = {}
+            nqp_B = {}
+            ax_strain = {}
+
+            # Acumular dados por arquivo (diferentes cores para cada arquivo)
+            for row in data:
+                arquivo = row['NomeCompleto']  # Identificar o arquivo
+                if arquivo not in void_ratio_A:
+                    void_ratio_A[arquivo] = []
+                    void_ratio_B[arquivo] = []
+                    eff_camb_A[arquivo] = []
+                    eff_camb_B[arquivo] = []
+                    dev_stress_A[arquivo] = []
+                    dev_stress_B[arquivo] = []
+                    nqp_A[arquivo] = []
+                    nqp_B[arquivo] = []
+                    ax_strain[arquivo] = []
+
+                void_ratio_A[arquivo].append(float(row.get('void_ratio_A', 0) or 0))
+                eff_camb_A[arquivo].append(float(row.get('eff_camb_A', 0) or 0))
+                void_ratio_B[arquivo].append(float(row.get('void_ratio_B', 0) or 0))
+                eff_camb_B[arquivo].append(float(row.get('eff_camb_B', 0) or 0))
+                dev_stress_A[arquivo].append(float(row.get('dev_stress_A', 0) or 0))
+                dev_stress_B[arquivo].append(float(row.get('dev_stress_B', 0) or 0))
+                nqp_A[arquivo].append(float(row.get('nqp_A', 0) or 0))
+                nqp_B[arquivo].append(float(row.get('nqp_B', 0) or 0))
+                ax_strain[arquivo].append(float(row.get('ax_strain', 0) or 0))
+
+            # Criar o layout dos gráficos (3x2 layout)
+            fig, axs = plt.subplots(3, 2, figsize=(12, 28))  # Ajuste o figsize para aumentar o espaçamento vertical entre os gráficos
+
+            # Função para gerar uma cor aleatória
+            def random_color():
+                return [random.random() for _ in range(3)]
+
+            # Dicionário para armazenar as cores usadas em cada arquivo
+            color_dict = {}
+
+            # Plotar os gráficos com cores diferentes para cada arquivo
+            for arquivo in void_ratio_A.keys():
+                color = random_color()  # Cor aleatória para cada arquivo
+                color_dict[arquivo] = color  # Armazenar a cor para a legenda
+
+                # Plot void_ratio_A * eff_camb_A
+                axs[0, 0].scatter(eff_camb_A[arquivo], void_ratio_A[arquivo], color=color)
+                axs[0, 0].set_xlabel('eff_camb_A')
+                axs[0, 0].set_ylabel('void_ratio_A')
+                axs[0, 0].set_title('void_ratio_A * eff_camb_A')
+
+                # Plot void_ratio_B * eff_camb_B
+                axs[0, 1].scatter(eff_camb_B[arquivo], void_ratio_B[arquivo], color=color)
+                axs[0, 1].set_xlabel('eff_camb_B')
+                axs[0, 1].set_ylabel('void_ratio_B')
+                axs[0, 1].set_title('void_ratio_B * eff_camb_B')
+
+                # Plot dev_stress_A * eff_camb_A
+                axs[1, 0].scatter(eff_camb_A[arquivo], dev_stress_A[arquivo], color=color)
+                axs[1, 0].set_xlabel('eff_camb_A')
+                axs[1, 0].set_ylabel('dev_stress_A')
+                axs[1, 0].set_title('dev_stress_A * eff_camb_A')
+
+                # Plot dev_stress_B * eff_camb_B
+                axs[1, 1].scatter(eff_camb_B[arquivo], dev_stress_B[arquivo], color=color)
+                axs[1, 1].set_xlabel('eff_camb_B')
+                axs[1, 1].set_ylabel('dev_stress_B')
+                axs[1, 1].set_title('dev_stress_B * eff_camb_B')
+
+                # Plot nqp_A * ax_strain
+                axs[2, 0].scatter(ax_strain[arquivo], nqp_A[arquivo], color=color)
+                axs[2, 0].set_xlabel('ax_strain')
+                axs[2, 0].set_ylabel('nqp_A')
+                axs[2, 0].set_title('nqp_A * ax_strain')
+
+                # Plot nqp_B * ax_strain
+                axs[2, 1].scatter(ax_strain[arquivo], nqp_B[arquivo], color=color)
+                axs[2, 1].set_xlabel('ax_strain')
+                axs[2, 1].set_ylabel('nqp_B')
+                axs[2, 1].set_title('nqp_B * ax_strain')
+
+            plt.tight_layout()
+
+            # Criar a janela de gráficos com barra de rolagem, sem bordas, 1280x960
+            graph_window = tk.Toplevel(self.root)
+            graph_window.title(f"Gráficos da Amostra {amostra_selecionada}")
+            graph_window.geometry("1280x960")
+
+            # Habilitar botões de minimizar, maximizar e fechar
+            graph_window.attributes('-toolwindow', False)
+
+            # Criar o canvas e a barra de rolagem
+            canvas = tk.Canvas(graph_window)
+            scroll_y = tk.Scrollbar(graph_window, orient="vertical", command=canvas.yview)
+            canvas.configure(yscrollcommand=scroll_y.set)
+
+            scroll_frame = tk.Frame(canvas)
+            scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+            canvas.pack(side="left", fill="both", expand=True)
+            scroll_y.pack(side="right", fill="y")
+
+            # Adicionar o gráfico ao canvas
+            canvas_graph = FigureCanvasTkAgg(fig, master=scroll_frame)
+            canvas_graph.draw()
+            canvas_graph.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+            # Adicionar a legenda no final da tela
+            legend_frame = tk.Frame(scroll_frame)
+            legend_frame.pack(pady=10)
+            for arquivo, color in color_dict.items():
+                legend_label = tk.Label(legend_frame, text=f"Arquivo: {arquivo}", bg=self._rgb_to_hex(color), width=20)
+                legend_label.pack(side="top", padx=5, pady=5)
+
+            # Adicionar o botão "Sair" no final
+            sair_button = tk.Button(scroll_frame, text="Sair", command=graph_window.destroy)
+            sair_button.pack(side="bottom", pady=10)
+
+        except KeyError as e:
+            messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
+
+    def _rgb_to_hex(self, rgb):
+        """Converte cores RGB para formato hexadecimal."""
+        return "#{:02x}{:02x}{:02x}".format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
 
     def plotar_graficos_arquivo(self, arquivo_selecionado):
         data = self.db_manager.get_data_for_file(arquivo_selecionado)
