@@ -262,7 +262,7 @@ class CisalhamentoData:
             raise ValueError(f"Nenhum dado encontrado para o estágio de Cisalhamento ({self.Cisalhamento_stage}).")
 
         # Declarar as colunas necessárias
-        self.ax_strain = self.df_cisalhamento['ax_strain_Original']
+        self.ax_strain = self.df_cisalhamento['ax_strain']
         self.dev_stress_A = self.df_cisalhamento['dev_stress_A']  # Usar 'dev_stress_A'
         self.dev_stress_B = self.df_cisalhamento['dev_stress_B']  # Usar 'dev_stress_B'
         self.vol_strain = self.df_cisalhamento['vol_strain']
