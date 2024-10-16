@@ -1,4 +1,4 @@
-# teste3.py
+# interface.py
 
 import os
 import pandas as pd
@@ -38,7 +38,7 @@ class TableProcessor:
                 original_headers[19]: 'eff_stress_rat_Original',
                 original_headers[20]: 'cur_area_Original',
                 original_headers[21]: 'shear_strain_Original',
-                original_headers[22]: 'camb_p_A',
+                original_headers[22]: 'camb_p_Original',
                 original_headers[23]: 'eff_camb_p_Original',
                 original_headers[24]: 'max_shear_stress_Original',
                 original_headers[25]: 'vol_change_Original',
@@ -48,6 +48,7 @@ class TableProcessor:
 
             df.rename(columns=header_mapping, inplace=True)
 
+            # Lista de colunas obrigatórias
             required_columns = [
                 'stage_no', 'time_test_start', 'time_stage_start',
                 'rad_press_Original', 'rad_vol_Original',
@@ -56,10 +57,12 @@ class TableProcessor:
                 'ax_disp_Original', 'ax_force_Original'
             ]
 
+            # Verificar colunas faltantes
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
                 raise ValueError(f"Colunas faltantes: {missing_columns}")
 
+            # Converter colunas numéricas
             numeric_columns = [
                 'rad_press_Original', 'rad_vol_Original', 'back_press_Original',
                 'back_vol_Original', 'load_cell_Original', 'pore_press_Original',
@@ -83,18 +86,19 @@ class TableProcessor:
             fin_dry_mass = safe_float_conversion(metadados.get("fin_dry_mass", 0))
 
             # Cálculos iniciais
-            init_dry_mass = init_mass / (1 + w_0)
+            init_dry_mass = init_mass / (1 + w_0) if (1 + w_0) != 0 else 0
             v_0 = h_init * np.pi * (d_init ** 2) / 4
-            vol_solid = init_dry_mass * 1000 / spec_grav
+            vol_solid = init_dry_mass * 1000 / spec_grav if spec_grav != 0 else 0
             v_w_f = w_f * init_dry_mass * 1000
 
-            # Cálculo da força axial
-            #df['ax_force'] = np.where(df['time_test_start'] == 0, 0, df['load_cell_Original'])
-            df['ax_force'] =  df['load_cell_Original']
+            # Cálculo da força axial e carga
+            df['ax_force'] = df['load_cell_Original']
+            df['load'] = df['load_cell_Original']
 
             # Variação e acúmulo de volume radial
             df['rad_vol_delta'] = np.where(df['time_test_start'] == 0, 0, df['rad_vol_Original'].diff().fillna(0))
-            df['rad_vol'] = np.where(df['time_test_start'] == 0, 0, df['rad_vol_delta'].cumsum())
+            df['rad_vol_cumsum'] = np.where(df['time_test_start'] == 0, 0, df['rad_vol_delta'].cumsum())
+            df['rad_vol'] = df['rad_vol_cumsum']
 
             # Pressões
             df['rad_press'] = df['rad_press_Original']
@@ -102,11 +106,13 @@ class TableProcessor:
 
             # Variação e acúmulo de volume de retorno
             df['back_vol_delta'] = np.where(df['time_test_start'] == 0, 0, df['back_vol_Original'].diff().fillna(0))
-            df['back_vol'] = np.where(df['time_test_start'] == 0, 0, df['back_vol_delta'].cumsum())
+            df['back_vol_cumsum'] = np.where(df['time_test_start'] == 0, 0, df['back_vol_delta'].cumsum())
+            df['back_vol'] = df['back_vol_cumsum']
 
             # Variação e acúmulo de deslocamento axial
             df['ax_disp_delta'] = np.where(df['time_test_start'] == 0, 0, df['ax_disp_Original'].diff().fillna(0))
-            df['ax_disp'] = np.where(df['time_test_start'] == 0, 0, df['ax_disp_delta'].cumsum())
+            df['ax_disp_cumsum'] = np.where(df['time_test_start'] == 0, 0, df['ax_disp_delta'].cumsum())
+            df['ax_disp'] = df['ax_disp_cumsum']
 
             # Cálculo da altura
             df['height'] = h_init - df['ax_disp']
@@ -115,21 +121,16 @@ class TableProcessor:
             df['vol_A'] = v_0 - df['back_vol']
             df['vol_B'] = v_0 - df['back_vol']
 
-            # Cálculo da área atual A inicial
-            df['cur_area_A'] = df['vol_A'] / df['height']
-
-            # Cálculo da área atual B inicial
-            df['cur_area_B'] = df['vol_B'] / df['height']
-
-            # Cálculo de void_ratio_B inicial
-            df['void_ratio_B'] = (df['vol_B'] - vol_solid) / vol_solid
+            # Cálculo da área atual A e B iniciais
+            df['cur_area_A'] = df['vol_A'] / df['height'].replace(0, np.nan)
+            df['cur_area_B'] = df['vol_B'] / df['height'].replace(0, np.nan)
 
             # Cálculo da tensão efetiva radial
             df['eff_rad_stress'] = df['rad_press'] - df['pore_press_Original']
 
             # Cálculo da tensão desviadora A e B iniciais
-            df['dev_stress_A'] =  df['load_cell_Original'] / (df['cur_area_A'] / 1000000)
-            df['dev_stress_B'] =  df['load_cell_Original'] / (df['cur_area_B'] / 1000000)
+            df['dev_stress_A'] = df['load_cell_Original'] / (df['cur_area_A'] / 1e6).replace(0, np.nan)
+            df['dev_stress_B'] = df['load_cell_Original'] / (df['cur_area_B'] / 1e6).replace(0, np.nan)
 
             # Instanciar METADADOS_PARTE2 com df e metadados após cálculos iniciais
             metadados_parte2 = METADADOS_PARTE2(df, metadados, init_dry_mass, v_0, vol_solid, v_w_f)
@@ -137,21 +138,25 @@ class TableProcessor:
             # Cálculo da tensão axial após a instância de METADADOS_PARTE2
             df['ax_stress'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
-                metadados_parte2.h_init_c / h_init,
-                metadados_parte2.h_init_c - h_init / h_init
+                (metadados_parte2.h_init_c - h_init) / h_init,
+                (metadados_parte2.h_init_c - h_init) / h_init
             )
 
             # Cálculos modificados para 'ax_strain' e 'vol_strain'
             df['ax_strain'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
                 df['ax_disp'] / h_init,
-                ((-metadados_parte2.ax_disp_c) + df['ax_disp']) / (h_init - df['ax_disp'])
+                ((-metadados_parte2.ax_disp_c) + df['ax_disp']) / (h_init - df['ax_disp']).replace(0, np.nan)
             )
 
             df['vol_strain'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
                 df['back_vol'] / v_0,
-                (-df['back_vol'] + metadados_parte2.back_vol_c) / metadados_parte2.v_c_B
+                np.where(
+                    metadados_parte2.v_c_B != 0,
+                    (-df['back_vol'] + metadados_parte2.back_vol_c) / metadados_parte2.v_c_B,
+                    np.nan
+                )
             )
 
             # Atualizar cálculos com base nos metadados atualizados
@@ -170,30 +175,36 @@ class TableProcessor:
             # Recalcular cur_area_B com condição
             df['cur_area_B'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
-                df['vol_B'] / df['height'],
-                metadados_parte2.consolidated_area * (1 - df['vol_strain']) / (1 - df['ax_strain'])
+                df['vol_B'] / df['height'].replace(0, np.nan),
+                np.where(
+                    (1 - df['vol_strain']) != 0,
+                    metadados_parte2.consolidated_area * (1 - df['vol_strain']) / (1 - df['ax_strain']),
+                    np.nan
+                )
             )
 
-             # Recalcular cur_area_A com condição
+            # Recalcular cur_area_A com condição
             df['cur_area_A'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
-                df['vol_A'] / df['height'],
-                df['vol_A'] / df['height']
+                df['vol_A'] / df['height'].replace(0, np.nan),
+                df['vol_A'] / df['height'].replace(0, np.nan)
             )
 
-            # Recalcular void_ratio_B
+            # Recalcular void_ratio_B e void_ratio_A
             df['void_ratio_B'] = (df['vol_B'] - vol_solid) / vol_solid
-            # Recalcular void_ratio_B
             df['void_ratio_A'] = (df['vol_A'] - vol_solid) / vol_solid
 
+            # Cálculo da tensão axial efetiva A e B
             df['eff_ax_stress_A'] = df['dev_stress_A'] + df['eff_rad_stress']
             df['eff_ax_stress_B'] = df['dev_stress_B'] + df['eff_rad_stress']
 
-            df['eff_stress_rat_A'] = df['eff_ax_stress_A'] / df['eff_rad_stress']
-            df['eff_stress_rat_B'] = df['eff_ax_stress_B'] / df['eff_rad_stress']
+            # Cálculo da razão de tensão efetiva A e B
+            df['eff_stress_rat_A'] = df['eff_ax_stress_A'] / df['eff_rad_stress'].replace(0, np.nan)
+            df['eff_stress_rat_B'] = df['eff_ax_stress_B'] / df['eff_rad_stress'].replace(0, np.nan)
 
-            df['eff_camb_A'] = (df['eff_rad_stress'] + df['eff_rad_stress'] + df['eff_ax_stress_A']) / 3
-            df['eff_camb_B'] = (df['eff_rad_stress'] + df['eff_rad_stress'] + df['eff_ax_stress_B']) / 3
+            # Cálculo da tensão efetiva de camber A e B
+            df['eff_camb_A'] = (df['eff_rad_stress'] * 2 + df['eff_ax_stress_A']) / 3
+            df['eff_camb_B'] = (df['eff_rad_stress'] * 2 + df['eff_ax_stress_B']) / 3
 
             # Recalcular camb_p_A e camb_p_B com base nos novos valores
             df['camb_p_A'] = ((df['ax_stress'] - df['dev_stress_A']) * 2 + df['ax_stress']) / 3
@@ -204,43 +215,121 @@ class TableProcessor:
             df['max_shear_stress_B'] = df['dev_stress_B'] / 2
 
             # Excesso de pressão de poros
-            df['excess_PWP'] = df['pore_press_Original'] - df['back_press']
+            df['excessPWP'] = df['pore_press_Original'] - df['back_press']
 
             # Resistência não drenada
-            #df['su_A'] = df['max_shear_stress_A'] / metadados_parte2.camb_p_A
-            #df['su_B'] = df['max_shear_stress_B'] / metadados_parte2.camb_p_B
+            df['du_kpa_A'] = np.where(
+                metadados_parte2.camb_p_A0 != 0,
+                df['max_shear_stress_A'] / metadados_parte2.camb_p_A0,
+                np.nan
+            )
+            df['du_kpa_B'] = np.where(
+                metadados_parte2.camb_p_B0 != 0,
+                df['max_shear_stress_B'] / metadados_parte2.camb_p_B0,
+                np.nan
+            )
 
-            df['du_kpa_A'] = df['pore_press_Original'] - metadados_parte2.pore_press_0
-            df['du_kpa_B'] = df['pore_press_Original'] - metadados_parte2.pore_press_0
+            # Cálculo de nqp_A e nqp_B
+            df['nqp_A'] = df['dev_stress_A'] / df['eff_camb_A'].replace(0, np.nan)
+            df['nqp_B'] = df['dev_stress_B'] / df['eff_camb_B'].replace(0, np.nan)
 
-            df['nqp_A'] = df['dev_stress_A'] / df['eff_camb_A']
-            df['nqp_B'] = df['dev_stress_B'] / df['eff_camb_B']
+            # Cálculo de m_A e m_B com clipping para evitar valores fora do intervalo [-1, 1]
+            df['m_A'] = np.degrees(
+                np.arcsin(
+                    ((3 * df['nqp_A']) / (6 + df['nqp_A'])).clip(-1, 1)
+                )
+            )
+            df['m_B'] = np.degrees(
+                np.arcsin(
+                    ((3 * df['nqp_B']) / (6 + df['nqp_B'])).clip(-1, 1)
+                )
+            )
 
-            df['m_A'] = metadados_parte2.vol_solid / df['void_ratio_A']
-            df['m_B'] = metadados_parte2.vol_solid / df['void_ratio_B']
+            # Cálculo de shear_strain
+            df['shear_strain'] = df['dev_stress_A'] / df['eff_ax_stress_A'].replace(0, np.nan)
 
-            df['shear_strain'] = df['dev_stress_A'] / df['eff_ax_stress_A']
-
+            # Cálculo dos diâmetros A e B
             df['diameter_A'] = 2 * np.sqrt(df['cur_area_A'] / np.pi)
             df['diameter_B'] = 2 * np.sqrt(df['cur_area_B'] / np.pi)
 
+            # Cálculo de b_val
             df['b_val'] = np.where(
-            df['stage_no'] == B_stage,
-            (metadados_parte2.rad_press_0 - df['rad_press']) / (metadados_parte2.pore_press_0 - df['pore_press_Original']),
-            "null")
+                df['stage_no'] == B_stage,
+                (metadados_parte2.rad_press_0 - df['rad_press']) / (metadados_parte2.pore_press_0 - df['pore_press_Original']).replace(0, np.nan),
+                np.nan
+            )
 
+            # Cálculo de médias de tensão efetiva
             df['avg_eff_stress_A'] = (df['eff_ax_stress_A'] + df['eff_rad_stress']) / 2
             df['avg_eff_stress_B'] = (df['eff_ax_stress_B'] + df['eff_rad_stress']) / 2
 
+            # Cálculo de média de tensões
             df['avg_mean_stress'] = (df['ax_stress'] + df['rad_press']) / 2
 
+            # Cálculo de deformações radiais
+            df['rad_strain_A'] = (df['diameter_A'] - d_init) / d_init
+            df['rad_strain_B'] = (df['diameter_B'] - d_init) / d_init
+
+            # Renomear as colunas calculadas para evitar duplicação no banco de dados
+            calculated_columns_mapping = {
+                'eff_rad_stress_calc': 'eff_rad_stress',
+                'ax_strain_calc': 'ax_strain',
+                'vol_strain_calc': 'vol_strain',
+                'void_ratio_B_calc': 'void_ratio_B',
+                'void_ratio_A_calc': 'void_ratio_A',
+                'eff_stress_rat_A_calc': 'eff_stress_rat_A',
+                'eff_stress_rat_B_calc': 'eff_stress_rat_B',
+                'eff_camb_A_calc': 'eff_camb_A',
+                'eff_camb_B_calc': 'eff_camb_B',
+                'camb_p_A_calc': 'camb_p_A',
+                'camb_p_B_calc': 'camb_p_B',
+                'max_shear_stress_A_calc': 'max_shear_stress_A',
+                'max_shear_stress_B_calc': 'max_shear_stress_B',
+                'shear_strain_calc': 'shear_strain',
+                'b_val_calc': 'b_val'
+            }
+
+            df.rename(columns=calculated_columns_mapping, inplace=True)
+
+            # Definir a lista completa de colunas a serem salvas no banco de dados
+            columns_to_save = [
+                'stage_no', 'time_test_start', 'time_stage_start', 'rad_press_Original', 'rad_vol_Original',
+                'back_press_Original', 'back_vol_Original', 'load_cell_Original', 'pore_press_Original',
+                'ax_disp_Original', 'ax_force_Original', 'ax_strain_Original', 'avg_diam_chg_Original',
+                'rad_strain_Original', 'ax_strain_Original_2', 'eff_ax_stress_Original', 'eff_rad_stress_Original',
+                'dev_stress_Original', 'total_stress_rat_Original', 'eff_stress_rat_Original',
+                'cur_area_Original', 'shear_strain_Original', 'camb_p_Original', 'eff_camb_p_Original',
+                'max_shear_stress_Original', 'vol_change_Original', 'b_value_Original', 'mean_stress_Original',
+                'ax_force', 'load', 'rad_vol_delta', 'rad_vol', 'rad_press', 'back_press',
+                'back_vol_delta', 'back_vol', 'ax_disp_delta', 'ax_disp', 'height', 'vol_A', 'vol_B',
+                'cur_area_A', 'cur_area_B', 'eff_rad_stress', 'dev_stress_A', 'dev_stress_B',
+                'ax_stress', 'ax_strain', 'vol_strain', 'void_ratio_B',
+                'void_ratio_A', 'eff_ax_stress_A', 'eff_ax_stress_B', 'eff_stress_rat_A',
+                'eff_stress_rat_B', 'eff_camb_A', 'eff_camb_B',
+                'camb_p_A', 'camb_p_B', 'max_shear_stress_A',
+                'max_shear_stress_B', 'excessPWP', 'du_kpa_A', 'du_kpa_B', 'nqp_A', 'nqp_B',
+                'm_A', 'm_B', 'shear_strain', 'diameter_A', 'diameter_B',
+                'b_val', 'avg_eff_stress_A', 'avg_eff_stress_B', 'avg_mean_stress',
+                'rad_strain_A', 'rad_strain_B'
+            ]
+
+            # Verificar se todas as colunas a serem salvas estão presentes no DataFrame
+            missing_columns_to_save = [col for col in columns_to_save if col not in df.columns]
+            if missing_columns_to_save:
+                raise ValueError(f"Colunas calculadas faltantes para salvar no banco: {missing_columns_to_save}")
+
+            # Selecionar apenas as colunas a serem salvas
+            df_to_save = df[columns_to_save]
+
+            # Impressão das colunas para verificação
+            print("Colunas do DataFrame após cálculos e renomeação:")
+            print(df_to_save.columns.tolist())
+
             # Salvar no banco de dados
-            process_file_for_db(df, os.path.basename(gds_file), metadados)
+            process_file_for_db(df_to_save, os.path.basename(gds_file), metadados)
 
             print(f"Dados processados e salvos no banco de dados para o arquivo: {os.path.basename(gds_file)}")
 
-            # Adicionando o print dos metadados calculados
-            #print("\nValores dos metadados calculados:")
             metadados_parte2.print_attributes()
 
             # Retornar a instância de metadados_parte2
@@ -251,20 +340,16 @@ class TableProcessor:
 
 class CisalhamentoData:
     def __init__(self, df, metadados):
-        # Obter o estágio de cisalhamento dinamicamente dos metadados
         self.Cisalhamento_stage = int(metadados.get("Cisalhamento"))
-        
-        # Filtrar os dados pelo estágio de cisalhamento
-        self.df_cisalhamento = df[df['stage_no'] == self.Cisalhamento_stage]
 
-        # Certificar-se de que os dados do estágio de cisalhamento estão presentes
+        self.df_cisalhamento = df[df['stage_no'] == self.Cisalhamento_stage].copy()
+
         if self.df_cisalhamento.empty:
             raise ValueError(f"Nenhum dado encontrado para o estágio de Cisalhamento ({self.Cisalhamento_stage}).")
 
-        # Declarar as colunas necessárias
         self.ax_strain = self.df_cisalhamento['ax_strain']
-        self.dev_stress_A = self.df_cisalhamento['dev_stress_A']  # Usar 'dev_stress_A'
-        self.dev_stress_B = self.df_cisalhamento['dev_stress_B']  # Usar 'dev_stress_B'
+        self.dev_stress_A = self.df_cisalhamento['dev_stress_A']
+        self.dev_stress_B = self.df_cisalhamento['dev_stress_B']
         self.vol_strain = self.df_cisalhamento['vol_strain']
         self.eff_camb_A = self.df_cisalhamento['eff_camb_A']
         self.eff_camb_B = self.df_cisalhamento['eff_camb_B']
@@ -277,10 +362,6 @@ class CisalhamentoData:
         self.m_A = self.df_cisalhamento['m_A']
         self.m_B = self.df_cisalhamento['m_B']
 
-#       void_ratio_A * eff_camb_A e void_ratio_B *  eff_camb_B. ok
-#       dev_stress_A * eff_camb_A e dev_stress_B *  eff_camb_B. ok
-#       nqp_A        * ax_strain e nqp_B         *  ax_strain.  ok
-
     def get_cisalhamento_data(self):
         return {
             "ax_strain": self.ax_strain,
@@ -291,14 +372,13 @@ class CisalhamentoData:
             "eff_camb_B": self.eff_camb_B,
             "du_kpa_A": self.du_kpa_A,
             "du_kpa_B": self.du_kpa_B,
-            "void_ratio_A" : self.void_ratio_A,
-            "void_ratio_B" : self.void_ratio_B,
-            "nqp_A" : self.nqp_A,
-            "nqp_B" : self.nqp_B,
-            "m_A" : self.m_A,
-            "m_B" : self.m_B
+            "void_ratio_A": self.void_ratio_A,
+            "void_ratio_B": self.void_ratio_B,
+            "nqp_A": self.nqp_A,
+            "nqp_B": self.nqp_B,
+            "m_A": self.m_A,
+            "m_B": self.m_B
         }
-
 
 class METADADOS_PARTE2:
     def __init__(self, df, metadados, init_dry_mass, v_0, vol_solid, v_w_f):
@@ -308,7 +388,6 @@ class METADADOS_PARTE2:
             except ZeroDivisionError:
                 return default_value
 
-        # Variáveis diretas dos metadados
         self.w_0 = safe_float_conversion(metadados.get('w_0', 0))
         self.w_f = safe_float_conversion(metadados.get('w_f', 0))
         self.init_mass = safe_float_conversion(metadados.get('init_mass', 0))
@@ -323,7 +402,6 @@ class METADADOS_PARTE2:
         self.fin_mass = safe_float_conversion(metadados.get("fin_mass", 0))
         self.fin_dry_mass = safe_float_conversion(metadados.get("fin_dry_mass", 0))
 
-        # Valores calculados
         self.init_dry_mass = init_dry_mass
         self.v_0 = v_0
         self.vol_solid = vol_solid
@@ -340,41 +418,31 @@ class METADADOS_PARTE2:
         b_stage_data = df[df['stage_no'] == self.B].copy()
 
         if ad_stage_data.empty:
-            raise ValueError(f"Nenhum dado encontrado para o estágio de Adensamento ({self.Adensamento}). Verifique se o valor está correto.")
+            raise ValueError(f"Nenhum dado encontrado para o estágio de Adensamento ({self.Adensamento}).")
 
-        # ax_disp_c da coluna 'ax_disp', último valor do estágio de adensamento
-        self.ax_disp_c = ad_stage_data['ax_disp'].iloc[-1]
-        # back_vol_c da coluna 'back_vol', último valor do estágio de adensamento
-        self.back_vol_c = ad_stage_data['back_vol'].iloc[-1]
-        # h_init_c da coluna 'height', último valor do estágio de adensamento
-        self.h_init_c = ad_stage_data['height'].iloc[-1]
+        self.ax_disp_c = ad_stage_data['ax_disp'].iloc[-1] if 'ax_disp' in ad_stage_data.columns else 0
+        self.back_vol_c = ad_stage_data['back_vol'].iloc[-1] if 'back_vol' in ad_stage_data.columns else 0
+        self.h_init_c = ad_stage_data['height'].iloc[-1] if 'height' in ad_stage_data.columns else 0
 
-        self.back_vol_f = df['back_vol'].iloc[-1] if not df.empty else 0
+        self.back_vol_f = df['back_vol'].iloc[-1] if 'back_vol' in df.columns and not df.empty else 0
 
-        # v_c_A e v_c_B
         self.v_c_A = self.v_0 - self.back_vol_c
         self.v_c_B = ((self.back_vol_c - self.back_vol_f) + self.v_w_f) + self.vol_solid
 
-        # w_c_A e w_c_B
-        self.w_c_A = self.v_c_A / self.init_dry_mass
-        self.w_c_B = self.v_c_B / self.init_dry_mass
+        self.w_c_A = safe_divide(self.v_c_A, self.init_dry_mass)
+        self.w_c_B = safe_divide(self.v_c_B, self.init_dry_mass)
 
-        # void_ratio_c da coluna 'void_ratio_B', último valor do estágio de adensamento
         self.void_ratio_c = ad_stage_data['void_ratio_B'].iloc[-1] if 'void_ratio_B' in ad_stage_data.columns else 0
-
-        # void_ratio_f
-        self.void_ratio_f = self.spec_grav * self.w_f / self.Saturacao_c
+        self.void_ratio_f = safe_divide(self.spec_grav * self.w_f, self.Saturacao_c)
 
         self.saturacao_c = 1
-        self.void_ratio_m = 0  # Conforme solicitado
+        self.void_ratio_m = 0
 
-        # vol_change_c: subtrair primeiro valor - último valor da coluna 'back_vol' do estágio de cisalhamento
         if not cis_stage_data.empty:
             self.vol_change_c = cis_stage_data['back_vol'].iloc[0] - cis_stage_data['back_vol'].iloc[-1]
         else:
             self.vol_change_c = 0
 
-        # vol_change_f_c: pegar o próximo stage do cisalhamento e subtrair primeiro valor - último valor
         next_stage = self.Cisalhamento + 1
         next_stage_data = df[df['stage_no'] == next_stage].copy()
         if not next_stage_data.empty:
@@ -382,20 +450,13 @@ class METADADOS_PARTE2:
         else:
             self.vol_change_f_c = 0
 
-        # cons_void_vol
         self.cons_void_vol = self.v_w_f + (self.back_vol_c - self.back_vol_f)
-
-        # final_void_vol
         self.final_void_vol = self.vol_solid * self.void_ratio_f
+        self.consolidated_area = safe_divide(self.cons_void_vol + self.vol_solid, self.h_init_c)
 
-        # consolidated_area
-        self.consolidated_area = (self.cons_void_vol + self.vol_solid) / self.h_init_c if self.h_init_c else 0
+        self.camb_p_A0 = ad_stage_data['camb_p_Original'].iloc[-1] if 'camb_p_Original' in ad_stage_data.columns else 0
+        self.camb_p_B0 = ad_stage_data['camb_p_Original'].iloc[-1] if 'camb_p_Original' in ad_stage_data.columns else 0
 
-        # camb_p_A e camb_p_B da coluna correspondente, último valor do estágio de adensamento
-        self.camb_p_A = ad_stage_data['camb_p_A'].iloc[-1] if 'camb_p_A' in ad_stage_data.columns else 0
-        self.camb_p_B = ad_stage_data['camb_p_B'].iloc[-1] if 'camb_p_B' in ad_stage_data.columns else 0
-        self.df = df
-        
     def print_attributes(self):
         print("========================== VALORES CALCULADOS ==========================")
         for attr, value in vars(self).items():

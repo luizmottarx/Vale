@@ -10,6 +10,7 @@ from teste1 import FileProcessor
 from teste2 import StageProcessor
 from teste3 import TableProcessor, CisalhamentoData
 import random
+import numpy as np
 
 class DatabaseManager:
     def __init__(self, db_name='C:/Users/lgv_v/Documents/LUIZ/Laboratorio_Geotecnia.db'):
@@ -683,84 +684,106 @@ class InterfaceApp:
             du_kpa_A = []
             du_kpa_B = []
 
+            # Iterar pelos dados e garantir que valores None sejam tratados corretamente
             for row in data:
-                void_ratio_A.append(float(row.get('void_ratio_A', 0)))
-                eff_camb_A.append(float(row.get('eff_camb_A', 0)))
-                void_ratio_B.append(float(row.get('void_ratio_B', 0)))
-                eff_camb_B.append(float(row.get('eff_camb_B', 0)))
-                dev_stress_A.append(float(row.get('dev_stress_A', 0)))
-                dev_stress_B.append(float(row.get('dev_stress_B', 0)))
-                nqp_A.append(float(row.get('nqp_A', 0)))
-                nqp_B.append(float(row.get('nqp_B', 0)))
-                ax_strain.append(float(row.get('ax_strain', 0)))
-                vol_strain.append(float(row.get('vol_strain', 0)))
-                m_A.append(float(row.get('m_A', 0)))
-                m_B.append(float(row.get('m_B', 0)))
-                du_kpa_A.append(float(row.get('du_kpa_A', 0)))
-                du_kpa_B.append(float(row.get('du_kpa_B', 0)))
+                void_ratio_A.append(float(row.get('void_ratio_A')) if row.get('void_ratio_A') is not None else np.nan)
+                eff_camb_A.append(float(row.get('eff_camb_A')) if row.get('eff_camb_A') is not None else np.nan)
+                void_ratio_B.append(float(row.get('void_ratio_B')) if row.get('void_ratio_B') is not None else np.nan)
+                eff_camb_B.append(float(row.get('eff_camb_B')) if row.get('eff_camb_B') is not None else np.nan)
+                dev_stress_A.append(float(row.get('dev_stress_A')) if row.get('dev_stress_A') is not None else np.nan)
+                dev_stress_B.append(float(row.get('dev_stress_B')) if row.get('dev_stress_B') is not None else np.nan)
+                nqp_A.append(float(row.get('nqp_A')) if row.get('nqp_A') is not None else np.nan)
+                nqp_B.append(float(row.get('nqp_B')) if row.get('nqp_B') is not None else np.nan)
+                ax_strain.append(float(row.get('ax_strain')) if row.get('ax_strain') is not None else np.nan)
+                vol_strain.append(float(row.get('vol_strain')) if row.get('vol_strain') is not None else np.nan)
+                m_A.append(float(row.get('m_A')) if row.get('m_A') is not None else np.nan)
+                m_B.append(float(row.get('m_B')) if row.get('m_B') is not None else np.nan)
+                du_kpa_A.append(float(row.get('du_kpa_A')) if row.get('du_kpa_A') is not None else np.nan)
+                du_kpa_B.append(float(row.get('du_kpa_B')) if row.get('du_kpa_B') is not None else np.nan)
+
+            # Função auxiliar para remover valores 0 ou NaN antes de plotar
+            def remove_zeros_nan(x, y):
+                filtered_x = []
+                filtered_y = []
+                for i in range(len(x)):
+                    if not np.isnan(x[i]) and not np.isnan(y[i]) and x[i] != 0 and y[i] != 0:
+                        filtered_x.append(x[i])
+                        filtered_y.append(y[i])
+                return filtered_x, filtered_y
 
             # Plot void_ratio_A * eff_camb_A
-            axs[0, 0].scatter(eff_camb_A, void_ratio_A, color='blue')
+            x, y = remove_zeros_nan(eff_camb_A, void_ratio_A)
+            axs[0, 0].scatter(x, y, color='blue')
             axs[0, 0].set_xlabel('eff_camb_A')
             axs[0, 0].set_ylabel('void_ratio_A')
             axs[0, 0].set_title('void_ratio_A * eff_camb_A')
 
             # Plot void_ratio_B * eff_camb_B
-            axs[0, 1].scatter(eff_camb_B, void_ratio_B, color='blue')
+            x, y = remove_zeros_nan(eff_camb_B, void_ratio_B)
+            axs[0, 1].scatter(x, y, color='blue')
             axs[0, 1].set_xlabel('eff_camb_B')
             axs[0, 1].set_ylabel('void_ratio_B')
             axs[0, 1].set_title('void_ratio_B * eff_camb_B')
 
             # Plot dev_stress_A * eff_camb_A
-            axs[1, 0].scatter(eff_camb_A, dev_stress_A, color='blue')
+            x, y = remove_zeros_nan(eff_camb_A, dev_stress_A)
+            axs[1, 0].scatter(x, y, color='blue')
             axs[1, 0].set_xlabel('eff_camb_A')
             axs[1, 0].set_ylabel('dev_stress_A')
             axs[1, 0].set_title('dev_stress_A * eff_camb_A')
 
             # Plot dev_stress_B * eff_camb_B
-            axs[1, 1].scatter(eff_camb_B, dev_stress_B, color='blue')
+            x, y = remove_zeros_nan(eff_camb_B, dev_stress_B)
+            axs[1, 1].scatter(x, y, color='blue')
             axs[1, 1].set_xlabel('eff_camb_B')
             axs[1, 1].set_ylabel('dev_stress_B')
             axs[1, 1].set_title('dev_stress_B * eff_camb_B')
 
             # Plot nqp_A * ax_strain
-            axs[2, 0].scatter(ax_strain, nqp_A, color='blue')
+            x, y = remove_zeros_nan(ax_strain, nqp_A)
+            axs[2, 0].scatter(x, y, color='blue')
             axs[2, 0].set_xlabel('ax_strain')
             axs[2, 0].set_ylabel('nqp_A')
             axs[2, 0].set_title('nqp_A * ax_strain')
 
             # Plot nqp_B * ax_strain
-            axs[2, 1].scatter(ax_strain, nqp_B, color='blue')
+            x, y = remove_zeros_nan(ax_strain, nqp_B)
+            axs[2, 1].scatter(x, y, color='blue')
             axs[2, 1].set_xlabel('ax_strain')
             axs[2, 1].set_ylabel('nqp_B')
             axs[2, 1].set_title('nqp_B * ax_strain')
 
             # Plot m_A * ax_strain
-            axs[3, 0].scatter(ax_strain, m_A, color='blue')
+            x, y = remove_zeros_nan(ax_strain, m_A)
+            axs[3, 0].scatter(x, y, color='blue')
             axs[3, 0].set_xlabel('ax_strain')
             axs[3, 0].set_ylabel('m_A')
             axs[3, 0].set_title('m_A * ax_strain')
 
             # Plot m_B * ax_strain
-            axs[3, 1].scatter(ax_strain, m_B, color='blue')
+            x, y = remove_zeros_nan(ax_strain, m_B)
+            axs[3, 1].scatter(x, y, color='blue')
             axs[3, 1].set_xlabel('ax_strain')
             axs[3, 1].set_ylabel('m_B')
             axs[3, 1].set_title('m_B * ax_strain')
 
             # vol_strain * ax_strain
-            axs[4, 0].scatter(vol_strain, ax_strain, color='blue')
-            axs[4, 0].set_xlabel('vol_strain')
-            axs[4, 0].set_ylabel('ax_strain')
+            x, y = remove_zeros_nan(ax_strain, vol_strain)
+            axs[4, 0].scatter(x, y, color='blue')
+            axs[4, 0].set_xlabel('ax_strain')
+            axs[4, 0].set_ylabel('vol_strain')
             axs[4, 0].set_title('vol_strain * ax_strain')
 
             # Plot du_kpa_A * ax_strain
-            axs[4, 1].scatter(ax_strain, du_kpa_A, color='blue')
+            x, y = remove_zeros_nan(ax_strain, du_kpa_A)
+            axs[4, 1].scatter(x, y, color='blue')
             axs[4, 1].set_xlabel('ax_strain')
             axs[4, 1].set_ylabel('du_kpa_A')
             axs[4, 1].set_title('du_kpa_A * ax_strain')
 
             # Plot du_kpa_B * ax_strain
-            axs[5, 0].scatter(ax_strain, du_kpa_B, color='blue')
+            x, y = remove_zeros_nan(ax_strain, du_kpa_B)
+            axs[5, 0].scatter(x, y, color='blue')
             axs[5, 0].set_xlabel('ax_strain')
             axs[5, 0].set_ylabel('du_kpa_B')
             axs[5, 0].set_title('du_kpa_B * ax_strain')
@@ -796,6 +819,7 @@ class InterfaceApp:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
+
 
 
     # Gerenciamento de Usuários
