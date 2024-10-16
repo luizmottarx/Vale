@@ -129,8 +129,8 @@ class TableProcessor:
             df['eff_rad_stress'] = df['rad_press'] - df['pore_press_Original']
 
             # Cálculo da tensão desviadora A e B iniciais
-            df['dev_stress_A'] = df['load_cell_Original'] / (df['cur_area_A'] / 1e6).replace(0, np.nan)
-            df['dev_stress_B'] = df['load_cell_Original'] / (df['cur_area_B'] / 1e6).replace(0, np.nan)
+            df['dev_stress_A'] = df['load_cell_Original'] / (df['cur_area_A'] / 100000).replace(0, np.nan)
+            df['dev_stress_B'] = df['load_cell_Original'] / (df['cur_area_B'] / 100000).replace(0, np.nan)
 
             # Instanciar METADADOS_PARTE2 com df e metadados após cálculos iniciais
             metadados_parte2 = METADADOS_PARTE2(df, metadados, init_dry_mass, v_0, vol_solid, v_w_f)
@@ -138,7 +138,7 @@ class TableProcessor:
             # Cálculo da tensão axial após a instância de METADADOS_PARTE2
             df['ax_stress'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
-                (metadados_parte2.h_init_c - h_init) / h_init,
+                metadados_parte2.h_init_c / h_init,
                 (metadados_parte2.h_init_c - h_init) / h_init
             )
 
@@ -246,7 +246,7 @@ class TableProcessor:
             )
 
             # Cálculo de shear_strain
-            df['shear_strain'] = df['dev_stress_A'] / df['eff_ax_stress_A'].replace(0, np.nan)
+            df['shear_strain'] = (2 * (df['ax_strain'] - df['vol_strain'])) / 3
 
             # Cálculo dos diâmetros A e B
             df['diameter_A'] = 2 * np.sqrt(df['cur_area_A'] / np.pi)
