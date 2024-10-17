@@ -53,7 +53,8 @@ class DatabaseManager:
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS Amostra (
                     id_amostra INTEGER PRIMARY KEY AUTOINCREMENT,
-                    amostra TEXT UNIQUE
+                    amostra TEXT UNIQUE,
+                    statusAmostra TEXT DEFAULT 'NV'  
                 )
             """)
             logging.info("Tabela 'Amostra' verificada/criada.")
@@ -66,8 +67,10 @@ class DatabaseManager:
                     id_amostra INTEGER,
                     NomeCompleto TEXT UNIQUE,
                     ensaio TEXT,
+                    statusIndividual TEXT DEFAULT 'NV', 
                     FOREIGN KEY (id_tipo) REFERENCES TipoEnsaio(id_tipo),
-                    FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra)
+                    FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra),
+                    FOREIGN KEY (statusAmostra) REFERENCES Amostra(statusAmostra)
                 )
             """)
             logging.info("Tabela 'Ensaio' verificada/criada.")

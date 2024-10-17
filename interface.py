@@ -33,12 +33,15 @@ class DatabaseManager:
                     tipo TEXT UNIQUE
                 )
             """)
+            # Tabela Amostra
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS Amostra (
                     id_amostra INTEGER PRIMARY KEY AUTOINCREMENT,
-                    amostra TEXT UNIQUE
+                    amostra TEXT UNIQUE,
+                    statusAmostra TEXT DEFAULT 'NV'  
                 )
             """)
+            # Tabela Ensaio
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS Ensaio (
                     id_ensaio INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,6 +49,7 @@ class DatabaseManager:
                     id_amostra INTEGER,
                     NomeCompleto TEXT UNIQUE,
                     ensaio TEXT,
+                    statusIndividual TEXT DEFAULT 'NV', 
                     FOREIGN KEY (id_tipo) REFERENCES TipoEnsaio(id_tipo),
                     FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra)
                 )
@@ -81,6 +85,18 @@ class DatabaseManager:
             return [row[0] for row in cursor.fetchall()]
         else:
             return []
+
+    def update_status_amostra(self, amostra, status):
+        with self.conn:
+            self.conn.execute("UPDATE Amostra SET statusAmostra = ? WHERE amostra = ?", (status, amostra))
+            self.conn.commit()
+            messagebox.showinfo("Status Atualizado", f"O status da amostra '{amostra}' foi alterado para '{status}'.")
+
+    def update_status_individual(self, arquivo, status):
+        with self.conn:
+            self.conn.execute("UPDATE Ensaio SET statusIndividual = ? WHERE NomeCompleto = ?", (status, arquivo))
+            self.conn.commit()
+            messagebox.showinfo("Status Atualizado", f"O status do arquivo '{arquivo}' foi alterado para '{status}'.")
 
     def get_data_for_amostra(self, amostra):
         cursor = self.conn.execute("""
@@ -693,15 +709,28 @@ class InterfaceApp:
                 legend_label = tk.Label(legend_frame, text=f"Arquivo: {arquivo}", bg=hex_color, width=50)
                 legend_label.pack(side="top", padx=5, pady=5)
 
-            # Adicionar o botão "Sair" no final
-            sair_button = tk.Button(scroll_frame, text="Sair", command=graph_window.destroy)
-            sair_button.pack(side="bottom", pady=10)
+    # Adicionar botões "Aprovado", "Refugado" e "Sair"
+            button_frame = tk.Frame(scroll_frame)
+            button_frame.pack(pady=10)
+
+            def set_status_aprovado():
+                self.db_manager.update_status_amostra(amostra_selecionada, "Aprovado")
+                messagebox.showinfo("Sucesso", "Amostra marcada como Aprovado.")
+                graph_window.destroy()
+
+            def set_status_refugado():
+                self.db_manager.update_status_amostra(amostra_selecionada, "Refugado")
+                messagebox.showinfo("Sucesso", "Amostra marcada como Refugado.")
+                graph_window.destroy()
+
+            tk.Button(button_frame, text="Aprovado", command=set_status_aprovado).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Refugado", command=set_status_refugado).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Sair", command=graph_window.destroy).pack(side="right", padx=10)
 
         except KeyError as e:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
-
 
 
     def plotar_graficos_arquivo(self, arquivo_selecionado):
@@ -877,9 +906,23 @@ class InterfaceApp:
             canvas_graph.draw()
             canvas_graph.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-            # Mover o botão "Sair" para o final
-            tk.Button(scroll_frame, text="Sair", command=graph_window.destroy).pack(pady=20)
+            # Adicionar botões "Aprovado", "Refugado" e "Sair"
+            button_frame = tk.Frame(scroll_frame)
+            button_frame.pack(pady=10)
 
+            def set_status_aprovado():
+                self.db_manager.update_status_individual(title, "Aprovado")
+                messagebox.showinfo("Sucesso", "Arquivo marcado como Aprovado.")
+                graph_window.destroy()
+
+            def set_status_refugado():
+                self.db_manager.update_status_individual(title, "Refugado")
+                messagebox.showinfo("Sucesso", "Arquivo marcado como Refugado.")
+                graph_window.destroy()
+
+            tk.Button(button_frame, text="Aprovado", command=set_status_aprovado).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Refugado", command=set_status_refugado).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Sair", command=graph_window.destroy).pack(side="right", padx=10)
         except KeyError as e:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
