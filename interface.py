@@ -11,6 +11,7 @@ from teste2 import StageProcessor
 from teste3 import TableProcessor, CisalhamentoData
 import random
 import numpy as np
+import pandas as pd
 
 class DatabaseManager:
     def __init__(self, db_name='C:/Users/lgv_v/Documents/LUIZ/Laboratorio_Geotecnia.db'):
@@ -117,6 +118,15 @@ class DatabaseManager:
         self.conn.close()
 
 class InterfaceApp:
+    def _rgb_to_hex(self, rgb):
+        """Converte cores RGB para formato hexadecimal."""
+        return "#{:02x}{:02x}{:02x}".format(
+            int(rgb[0]*255),
+            int(rgb[1]*255),
+            int(rgb[2]*255)
+        )
+
+
     def __init__(self, root):
         self.root = root
         self.root.title("Sistema de Gerenciamento de Ensaios")
@@ -523,6 +533,14 @@ class InterfaceApp:
                 messagebox.showinfo("Informação", "Nenhum dado encontrado para a amostra selecionada.")
                 return
 
+            # Organizar os dados por arquivo (NomeCompleto)
+            data_by_file = {}
+            for row in data:
+                arquivo = row['NomeCompleto']
+                if arquivo not in data_by_file:
+                    data_by_file[arquivo] = []
+                data_by_file[arquivo].append(row)
+
             # Inicializar listas para cada par de dados
             void_ratio_A = {}
             void_ratio_B = {}
@@ -533,33 +551,64 @@ class InterfaceApp:
             nqp_A = {}
             nqp_B = {}
             ax_strain = {}
+            vol_strain = {}
+            du_kpa_A = {}
+            du_kpa_B = {}
+            m_A = {}
+            m_B = {}
 
-            # Acumular dados por arquivo (diferentes cores para cada arquivo)
-            for row in data:
-                arquivo = row['NomeCompleto']  # Identificar o arquivo
-                if arquivo not in void_ratio_A:
-                    void_ratio_A[arquivo] = []
-                    void_ratio_B[arquivo] = []
-                    eff_camb_A[arquivo] = []
-                    eff_camb_B[arquivo] = []
-                    dev_stress_A[arquivo] = []
-                    dev_stress_B[arquivo] = []
-                    nqp_A[arquivo] = []
-                    nqp_B[arquivo] = []
-                    ax_strain[arquivo] = []
+            for arquivo, rows in data_by_file.items():
+                # Obter metadados para o arquivo
+                metadados = self.db_manager.get_metadata_for_file(arquivo)
+                if not metadados:
+                    continue  # Se não há metadados, pular este arquivo
 
-                void_ratio_A[arquivo].append(float(row.get('void_ratio_A', 0) or 0))
-                eff_camb_A[arquivo].append(float(row.get('eff_camb_A', 0) or 0))
-                void_ratio_B[arquivo].append(float(row.get('void_ratio_B', 0) or 0))
-                eff_camb_B[arquivo].append(float(row.get('eff_camb_B', 0) or 0))
-                dev_stress_A[arquivo].append(float(row.get('dev_stress_A', 0) or 0))
-                dev_stress_B[arquivo].append(float(row.get('dev_stress_B', 0) or 0))
-                nqp_A[arquivo].append(float(row.get('nqp_A', 0) or 0))
-                nqp_B[arquivo].append(float(row.get('nqp_B', 0) or 0))
-                ax_strain[arquivo].append(float(row.get('ax_strain', 0) or 0))
+                # Converter a lista de tuplas em um dicionário
+                metadados_dict = {key: value for key, value in metadados}
+
+                cisalhamento_stage = int(metadados_dict.get("Cisalhamento", 8))  # Valor padrão 8 se não encontrado
+
+                # Converter a lista de dicts para DataFrame
+                df = pd.DataFrame(rows)
+
+                # Converter as colunas necessárias para float
+                numeric_columns = [
+                    'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
+                    'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B', 'ax_strain',
+                    'vol_strain', 'du_kpa_A', 'du_kpa_B', 'm_A', 'm_B', 'stage_no'
+                ]
+                for col in numeric_columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+                # Filtrar os dados para o estágio de cisalhamento
+                df_cisalhamento = df[df['stage_no'] == cisalhamento_stage]
+
+                if df_cisalhamento.empty:
+                    continue  # Se não há dados para o estágio de cisalhamento, pular este arquivo
+
+                # Agora, adicionar os dados às listas
+                void_ratio_A[arquivo] = df_cisalhamento['void_ratio_A'].tolist()
+                void_ratio_B[arquivo] = df_cisalhamento['void_ratio_B'].tolist()
+                eff_camb_A[arquivo] = df_cisalhamento['eff_camb_A'].tolist()
+                eff_camb_B[arquivo] = df_cisalhamento['eff_camb_B'].tolist()
+                dev_stress_A[arquivo] = df_cisalhamento['dev_stress_A'].tolist()
+                dev_stress_B[arquivo] = df_cisalhamento['dev_stress_B'].tolist()
+                nqp_A[arquivo] = df_cisalhamento['nqp_A'].tolist()
+                nqp_B[arquivo] = df_cisalhamento['nqp_B'].tolist()
+                ax_strain[arquivo] = df_cisalhamento['ax_strain'].tolist()
+                vol_strain[arquivo] = df_cisalhamento['vol_strain'].tolist()
+                du_kpa_A[arquivo] = df_cisalhamento['du_kpa_A'].tolist()
+                du_kpa_B[arquivo] = df_cisalhamento['du_kpa_B'].tolist()
+                m_A[arquivo] = df_cisalhamento['m_A'].tolist()
+                m_B[arquivo] = df_cisalhamento['m_B'].tolist()
+
+            # Verificar se há dados para plotar
+            if not void_ratio_A:
+                messagebox.showinfo("Informação", "Nenhum dado encontrado para o estágio de cisalhamento nos arquivos selecionados.")
+                return
 
             # Criar o layout dos gráficos (3x2 layout)
-            fig, axs = plt.subplots(3, 2, figsize=(12, 28))  # Ajuste o figsize para aumentar o espaçamento vertical entre os gráficos
+            fig, axs = plt.subplots(3, 2, figsize=(12, 28))
 
             # Função para gerar uma cor aleatória
             def random_color():
@@ -574,37 +623,37 @@ class InterfaceApp:
                 color_dict[arquivo] = color  # Armazenar a cor para a legenda
 
                 # Plot void_ratio_A * eff_camb_A
-                axs[0, 0].scatter(eff_camb_A[arquivo], void_ratio_A[arquivo], color=color)
+                axs[0, 0].scatter(eff_camb_A[arquivo], void_ratio_A[arquivo], color=color, label=arquivo)
                 axs[0, 0].set_xlabel('eff_camb_A')
                 axs[0, 0].set_ylabel('void_ratio_A')
                 axs[0, 0].set_title('void_ratio_A * eff_camb_A')
 
                 # Plot void_ratio_B * eff_camb_B
-                axs[0, 1].scatter(eff_camb_B[arquivo], void_ratio_B[arquivo], color=color)
+                axs[0, 1].scatter(eff_camb_B[arquivo], void_ratio_B[arquivo], color=color, label=arquivo)
                 axs[0, 1].set_xlabel('eff_camb_B')
                 axs[0, 1].set_ylabel('void_ratio_B')
                 axs[0, 1].set_title('void_ratio_B * eff_camb_B')
 
                 # Plot dev_stress_A * eff_camb_A
-                axs[1, 0].scatter(eff_camb_A[arquivo], dev_stress_A[arquivo], color=color)
+                axs[1, 0].scatter(eff_camb_A[arquivo], dev_stress_A[arquivo], color=color, label=arquivo)
                 axs[1, 0].set_xlabel('eff_camb_A')
                 axs[1, 0].set_ylabel('dev_stress_A')
                 axs[1, 0].set_title('dev_stress_A * eff_camb_A')
 
                 # Plot dev_stress_B * eff_camb_B
-                axs[1, 1].scatter(eff_camb_B[arquivo], dev_stress_B[arquivo], color=color)
+                axs[1, 1].scatter(eff_camb_B[arquivo], dev_stress_B[arquivo], color=color, label=arquivo)
                 axs[1, 1].set_xlabel('eff_camb_B')
                 axs[1, 1].set_ylabel('dev_stress_B')
                 axs[1, 1].set_title('dev_stress_B * eff_camb_B')
 
                 # Plot nqp_A * ax_strain
-                axs[2, 0].scatter(ax_strain[arquivo], nqp_A[arquivo], color=color)
+                axs[2, 0].scatter(ax_strain[arquivo], nqp_A[arquivo], color=color, label=arquivo)
                 axs[2, 0].set_xlabel('ax_strain')
                 axs[2, 0].set_ylabel('nqp_A')
                 axs[2, 0].set_title('nqp_A * ax_strain')
 
                 # Plot nqp_B * ax_strain
-                axs[2, 1].scatter(ax_strain[arquivo], nqp_B[arquivo], color=color)
+                axs[2, 1].scatter(ax_strain[arquivo], nqp_B[arquivo], color=color, label=arquivo)
                 axs[2, 1].set_xlabel('ax_strain')
                 axs[2, 1].set_ylabel('nqp_B')
                 axs[2, 1].set_title('nqp_B * ax_strain')
@@ -640,7 +689,8 @@ class InterfaceApp:
             legend_frame = tk.Frame(scroll_frame)
             legend_frame.pack(pady=10)
             for arquivo, color in color_dict.items():
-                legend_label = tk.Label(legend_frame, text=f"Arquivo: {arquivo}", bg=self._rgb_to_hex(color), width=20)
+                hex_color = self._rgb_to_hex(color)
+                legend_label = tk.Label(legend_frame, text=f"Arquivo: {arquivo}", bg=hex_color, width=50)
                 legend_label.pack(side="top", padx=5, pady=5)
 
             # Adicionar o botão "Sair" no final
@@ -652,9 +702,7 @@ class InterfaceApp:
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
 
-    def _rgb_to_hex(self, rgb):
-        """Converte cores RGB para formato hexadecimal."""
-        return "#{:02x}{:02x}{:02x}".format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+
 
     def plotar_graficos_arquivo(self, arquivo_selecionado):
         data = self.db_manager.get_data_for_file(arquivo_selecionado)
@@ -666,40 +714,54 @@ class InterfaceApp:
 
     def plotar_graficos(self, data, title):
         try:
-            fig, axs = plt.subplots(6, 2, figsize=(14, 32))  # Ajuste o figsize para aumentar o espaçamento entre os gráficos
+            # Obter o nome do arquivo a partir do título
+            arquivo = title.replace("Gráficos do Arquivo ", "")
 
-            # Inicializar listas para cada par de dados
-            void_ratio_A = []
-            void_ratio_B = []
-            eff_camb_A = []
-            eff_camb_B = []
-            dev_stress_A = []
-            dev_stress_B = []
-            nqp_A = []
-            nqp_B = []
-            ax_strain = []
-            vol_strain = []
-            m_A = []
-            m_B = []
-            du_kpa_A = []
-            du_kpa_B = []
+            # Obter metadados para o arquivo
+            metadados = self.db_manager.get_metadata_for_file(arquivo)
+            if not metadados:
+                messagebox.showerror("Erro", f"Metadados não encontrados para o arquivo: {arquivo}")
+                return
 
-            # Iterar pelos dados e garantir que valores None sejam tratados corretamente
-            for row in data:
-                void_ratio_A.append(float(row.get('void_ratio_A')) if row.get('void_ratio_A') is not None else np.nan)
-                eff_camb_A.append(float(row.get('eff_camb_A')) if row.get('eff_camb_A') is not None else np.nan)
-                void_ratio_B.append(float(row.get('void_ratio_B')) if row.get('void_ratio_B') is not None else np.nan)
-                eff_camb_B.append(float(row.get('eff_camb_B')) if row.get('eff_camb_B') is not None else np.nan)
-                dev_stress_A.append(float(row.get('dev_stress_A')) if row.get('dev_stress_A') is not None else np.nan)
-                dev_stress_B.append(float(row.get('dev_stress_B')) if row.get('dev_stress_B') is not None else np.nan)
-                nqp_A.append(float(row.get('nqp_A')) if row.get('nqp_A') is not None else np.nan)
-                nqp_B.append(float(row.get('nqp_B')) if row.get('nqp_B') is not None else np.nan)
-                ax_strain.append(float(row.get('ax_strain')) if row.get('ax_strain') is not None else np.nan)
-                vol_strain.append(float(row.get('vol_strain')) if row.get('vol_strain') is not None else np.nan)
-                m_A.append(float(row.get('m_A')) if row.get('m_A') is not None else np.nan)
-                m_B.append(float(row.get('m_B')) if row.get('m_B') is not None else np.nan)
-                du_kpa_A.append(float(row.get('du_kpa_A')) if row.get('du_kpa_A') is not None else np.nan)
-                du_kpa_B.append(float(row.get('du_kpa_B')) if row.get('du_kpa_B') is not None else np.nan)
+            # Converter a lista de tuplas em um dicionário
+            metadados_dict = {key: value for key, value in metadados}
+
+            cisalhamento_stage = int(metadados_dict.get("Cisalhamento", 8))  # Valor padrão 8 se não encontrado
+
+            # Converter data (lista de dicts) em DataFrame
+            df = pd.DataFrame(data)
+
+            # Converter as colunas necessárias para float
+            numeric_columns = [
+                'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
+                'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B', 'ax_strain',
+                'vol_strain', 'm_A', 'm_B', 'du_kpa_A', 'du_kpa_B', 'stage_no'
+            ]
+            for col in numeric_columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # Filtrar os dados para o estágio de cisalhamento
+            df_cisalhamento = df[df['stage_no'] == cisalhamento_stage]
+
+            if df_cisalhamento.empty:
+                messagebox.showinfo("Informação", "Nenhum dado encontrado para o estágio de cisalhamento.")
+                return
+
+            # Extrair as colunas para listas
+            void_ratio_A = df_cisalhamento['void_ratio_A'].tolist()
+            void_ratio_B = df_cisalhamento['void_ratio_B'].tolist()
+            eff_camb_A = df_cisalhamento['eff_camb_A'].tolist()
+            eff_camb_B = df_cisalhamento['eff_camb_B'].tolist()
+            dev_stress_A = df_cisalhamento['dev_stress_A'].tolist()
+            dev_stress_B = df_cisalhamento['dev_stress_B'].tolist()
+            nqp_A = df_cisalhamento['nqp_A'].tolist()
+            nqp_B = df_cisalhamento['nqp_B'].tolist()
+            ax_strain = df_cisalhamento['ax_strain'].tolist()
+            vol_strain = df_cisalhamento['vol_strain'].tolist()
+            m_A = df_cisalhamento['m_A'].tolist()
+            m_B = df_cisalhamento['m_B'].tolist()
+            du_kpa_A = df_cisalhamento['du_kpa_A'].tolist()
+            du_kpa_B = df_cisalhamento['du_kpa_B'].tolist()
 
             # Função auxiliar para remover valores 0 ou NaN antes de plotar
             def remove_zeros_nan(x, y):
@@ -710,6 +772,9 @@ class InterfaceApp:
                         filtered_x.append(x[i])
                         filtered_y.append(y[i])
                 return filtered_x, filtered_y
+
+            # Criar os gráficos usando os dados filtrados
+            fig, axs = plt.subplots(6, 2, figsize=(14, 32))  # Ajuste o figsize para aumentar o espaçamento entre os gráficos
 
             # Plot void_ratio_A * eff_camb_A
             x, y = remove_zeros_nan(eff_camb_A, void_ratio_A)
@@ -819,7 +884,6 @@ class InterfaceApp:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
-
 
 
     # Gerenciamento de Usuários
