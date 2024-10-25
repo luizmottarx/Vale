@@ -1,4 +1,4 @@
-# interface.py
+# teste3.py
 
 import os
 import pandas as pd
@@ -322,13 +322,19 @@ class TableProcessor:
             df_to_save = df[columns_to_save]
 
             # Impressão das colunas para verificação
-            print("Colunas do DataFrame após cálculos e renomeação:")
-            print(df_to_save.columns.tolist())
+            #print("Colunas do DataFrame após cálculos e renomeação:")
+            #print(df_to_save.columns.tolist())
 
             # Salvar no banco de dados
             process_file_for_db(df_to_save, os.path.basename(gds_file), metadados)
 
             print(f"Dados processados e salvos no banco de dados para o arquivo: {os.path.basename(gds_file)}")
+
+            # Atualizar metadados com novos valores calculados
+            metadados['dry_unit_weight'] = metadados_parte2.dry_unit_weight
+            metadados['init_void_ratio'] = metadados_parte2.init_void_ratio
+            metadados['init_sat'] = metadados_parte2.init_sat
+            metadados['post_cons_void'] = metadados_parte2.post_cons_void
 
             metadados_parte2.print_attributes()
 
@@ -407,6 +413,29 @@ class METADADOS_PARTE2:
         self.vol_solid = vol_solid
         self.v_w_f = v_w_f
 
+        # Assumindo que 'd_init' é o diâmetro inicial e 'h_init' é a altura inicial
+        self.init_diameter = self.d_init
+        self.init_height = self.h_init
+
+        # Cálculo de dry_unit_weight
+        self.dry_unit_weight = safe_divide(
+            self.init_dry_mass,
+            ((((self.init_diameter / 10) ** 2) * np.pi) / 4) * (self.init_height / 10)
+        )
+
+        # Cálculo de init_void_ratio
+        self.init_void_ratio = safe_divide(
+            self.v_0 - self.vol_solid,
+            self.vol_solid
+        )
+
+        # Cálculo de init_sat
+        self.init_sat = safe_divide(
+            self.spec_grav * self.init_dry_mass,
+            self.init_void_ratio
+        ) * 100
+
+        # Cálculos existentes...
         self.ax_disp_0 = 0
         self.back_vol_0 = 0
         self.back_press_0 = df['back_press_Original'].iloc[0] if not df.empty else 0
@@ -420,11 +449,25 @@ class METADADOS_PARTE2:
         if ad_stage_data.empty:
             raise ValueError(f"Nenhum dado encontrado para o estágio de Adensamento ({self.Adensamento}).")
 
-        self.ax_disp_c = ad_stage_data['ax_disp'].iloc[-1] if 'ax_disp' in ad_stage_data.columns else 0
-        self.back_vol_c = ad_stage_data['back_vol'].iloc[-1] if 'back_vol' in ad_stage_data.columns else 0
-        self.h_init_c = ad_stage_data['height'].iloc[-1] if 'height' in ad_stage_data.columns else 0
+        if 'ax_disp' in ad_stage_data.columns and not ad_stage_data['ax_disp'].empty:
+            self.ax_disp_c = ad_stage_data['ax_disp'].iloc[-1]
+        else:
+            self.ax_disp_c = 0
 
-        self.back_vol_f = df['back_vol'].iloc[-1] if 'back_vol' in df.columns and not df.empty else 0
+        if 'back_vol' in ad_stage_data.columns and not ad_stage_data['back_vol'].empty:
+            self.back_vol_c = ad_stage_data['back_vol'].iloc[-1]
+        else:
+            self.back_vol_c = 0
+
+        if 'height' in ad_stage_data.columns and not ad_stage_data['height'].empty:
+            self.h_init_c = ad_stage_data['height'].iloc[-1]
+        else:
+            self.h_init_c = 0
+
+        if 'back_vol' in df.columns and not df['back_vol'].empty:
+            self.back_vol_f = df['back_vol'].iloc[-1]
+        else:
+            self.back_vol_f = 0
 
         self.v_c_A = self.v_0 - self.back_vol_c
         self.v_c_B = ((self.back_vol_c - self.back_vol_f) + self.v_w_f) + self.vol_solid
@@ -432,30 +475,44 @@ class METADADOS_PARTE2:
         self.w_c_A = safe_divide(self.v_c_A, self.init_dry_mass)
         self.w_c_B = safe_divide(self.v_c_B, self.init_dry_mass)
 
-        self.void_ratio_c = ad_stage_data['void_ratio_B'].iloc[-1] if 'void_ratio_B' in ad_stage_data.columns else 0
+        if 'void_ratio_B' in ad_stage_data.columns and not ad_stage_data['void_ratio_B'].empty:
+            self.void_ratio_c = ad_stage_data['void_ratio_B'].iloc[-1]
+        else:
+            self.void_ratio_c = 0
+
         self.void_ratio_f = safe_divide(self.spec_grav * self.w_f, self.Saturacao_c)
 
         self.saturacao_c = 1
         self.void_ratio_m = 0
 
-        if not cis_stage_data.empty:
+        if not cis_stage_data.empty and 'back_vol' in cis_stage_data.columns and not cis_stage_data['back_vol'].empty:
             self.vol_change_c = cis_stage_data['back_vol'].iloc[0] - cis_stage_data['back_vol'].iloc[-1]
         else:
             self.vol_change_c = 0
 
         next_stage = self.Cisalhamento + 1
         next_stage_data = df[df['stage_no'] == next_stage].copy()
-        if not next_stage_data.empty:
+        if not next_stage_data.empty and 'back_vol' in next_stage_data.columns and not next_stage_data['back_vol'].empty:
             self.vol_change_f_c = next_stage_data['back_vol'].iloc[0] - next_stage_data['back_vol'].iloc[-1]
         else:
             self.vol_change_f_c = 0
 
+        # Já calculado anteriormente
         self.cons_void_vol = self.v_w_f + (self.back_vol_c - self.back_vol_f)
+        self.post_cons_void = safe_divide(
+            self.cons_void_vol,
+            self.vol_solid
+        )
+
         self.final_void_vol = self.vol_solid * self.void_ratio_f
         self.consolidated_area = safe_divide(self.cons_void_vol + self.vol_solid, self.h_init_c)
 
-        self.camb_p_A0 = ad_stage_data['camb_p_Original'].iloc[-1] if 'camb_p_Original' in ad_stage_data.columns else 0
-        self.camb_p_B0 = ad_stage_data['camb_p_Original'].iloc[-1] if 'camb_p_Original' in ad_stage_data.columns else 0
+        if 'camb_p_Original' in ad_stage_data.columns and not ad_stage_data['camb_p_Original'].empty:
+            self.camb_p_A0 = ad_stage_data['camb_p_Original'].iloc[-1]
+            self.camb_p_B0 = ad_stage_data['camb_p_Original'].iloc[-1]
+        else:
+            self.camb_p_A0 = 0
+            self.camb_p_B0 = 0
 
     def print_attributes(self):
         print("========================== VALORES CALCULADOS ==========================")

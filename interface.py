@@ -542,7 +542,7 @@ class InterfaceApp:
             metadata_text.insert(tk.END, f"{metadado}: {valor}\n")
         metadata_text.config(state=tk.DISABLED)
         metadata_text.pack()
-
+        
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
