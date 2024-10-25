@@ -94,9 +94,18 @@ class DatabaseManager:
 
     def update_status_individual(self, arquivo, status):
         with self.conn:
-            self.conn.execute("UPDATE Ensaio SET statusIndividual = ? WHERE NomeCompleto = ?", (status, arquivo))
+            cursor = self.conn.execute(
+                "UPDATE Ensaio SET statusIndividual = ? WHERE NomeCompleto = ?",
+                (status, arquivo)
+            )
             self.conn.commit()
-            messagebox.showinfo("Status Atualizado", f"O status do arquivo '{arquivo}' foi alterado para '{status}'.")
+
+            # Adicionar uma verificação para garantir que a atualização foi feita
+            if cursor.rowcount == 0:
+                messagebox.showerror("Erro", "Falha ao atualizar o status. Verifique se o arquivo existe.")
+            else:
+                messagebox.showinfo("Status Atualizado", f"O status do arquivo '{arquivo}' foi alterado para '{status}'.")
+
 
     def get_data_for_amostra(self, amostra):
         cursor = self.conn.execute("""
@@ -744,7 +753,7 @@ class InterfaceApp:
     def plotar_graficos(self, data, title):
         try:
             # Obter o nome do arquivo a partir do título
-            arquivo = title.replace("Gráficos do Arquivo ", "")
+            arquivo = title.replace("Gráficos do Arquivo ", "").strip()
 
             # Obter metadados para o arquivo
             metadados = self.db_manager.get_metadata_for_file(arquivo)
@@ -911,18 +920,19 @@ class InterfaceApp:
             button_frame.pack(pady=10)
 
             def set_status_aprovado():
-                self.db_manager.update_status_individual(title, "Aprovado")
-                messagebox.showinfo("Sucesso", "Arquivo marcado como Aprovado.")
+                print(f"Atualizando status para 'Aprovado' para o arquivo: {arquivo}")  # Log de depuração
+                self.db_manager.update_status_individual(arquivo, "Aprovado")
                 graph_window.destroy()
 
             def set_status_refugado():
-                self.db_manager.update_status_individual(title, "Refugado")
-                messagebox.showinfo("Sucesso", "Arquivo marcado como Refugado.")
+                print(f"Atualizando status para 'Refugado' para o arquivo: {arquivo}")  # Log de depuração
+                self.db_manager.update_status_individual(arquivo, "Refugado")
                 graph_window.destroy()
 
             tk.Button(button_frame, text="Aprovado", command=set_status_aprovado).pack(side="left", padx=10)
             tk.Button(button_frame, text="Refugado", command=set_status_refugado).pack(side="left", padx=10)
             tk.Button(button_frame, text="Sair", command=graph_window.destroy).pack(side="right", padx=10)
+
         except KeyError as e:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
