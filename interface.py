@@ -203,6 +203,8 @@ class InterfaceApp:
         cursor = self.db_manager.conn.execute("SELECT * FROM usuarios WHERE login = ? AND senha = ?", (user, password))
         return cursor.fetchone() is not None
 
+# No método create_main_menu da classe InterfaceApp, adicionar o novo botão
+
     def create_main_menu(self):
         self.clear_screen()
         self.root.title("Menu Principal")
@@ -216,7 +218,10 @@ class InterfaceApp:
 
         tk.Button(frame, text="Encontrar Arquivos", command=self.find_files, width=30).pack(pady=10)
         tk.Button(frame, text="Verificar Ensaio", command=self.verificar_ensaio_screen, width=30).pack(pady=10)
+        # Adicionar o novo botão aqui
+        tk.Button(frame, text="Gerar Planilha Cliente", command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
         tk.Button(frame, text="Sair", command=self.root.quit, width=30).pack(pady=10)
+
 
     # Fluxo Encontrar Arquivos
     def find_files(self):
@@ -937,7 +942,46 @@ class InterfaceApp:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
+    def gerar_planilha_cliente_screen(self):
+        self.clear_screen()
+        self.root.title("Gerar Planilha Cliente")
 
+        amostras = self.db_manager.get_amostras()
+        if not amostras:
+            messagebox.showinfo("Informação", "Nenhuma amostra encontrada.")
+            self.create_main_menu()
+            return
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text="Selecione uma amostra para gerar a planilha:").pack(pady=10)
+        self.amostra_listbox = tk.Listbox(frame, width=80, height=20)
+        for amostra in amostras:
+            self.amostra_listbox.insert(tk.END, amostra)
+        self.amostra_listbox.pack()
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=10)
+
+        tk.Button(button_frame, text="Gerar Planilha", command=self.gerar_planilha_selecionada, width=15).grid(row=0, column=0, padx=10)
+        tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
+
+    def gerar_planilha_selecionada(self):
+        selection = self.amostra_listbox.curselection()
+        if selection:
+            index = selection[0]
+            amostra_selecionada = self.amostra_listbox.get(index)
+            # Chamar a função que gera a planilha para a amostra selecionada
+            try:
+                from PreencherExcel import gerar_planilha_para_amostra
+                gerar_planilha_para_amostra(amostra_selecionada)
+                messagebox.showinfo("Sucesso", f"Planilha gerada com sucesso para a amostra '{amostra_selecionada}'.")
+            except Exception as e:
+                messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
+        else:
+            messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
+       
 
     # Gerenciamento de Usuários
     def add_user_screen(self):

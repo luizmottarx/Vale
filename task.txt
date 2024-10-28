@@ -1,0 +1,20 @@
+
+automation python, em somente um arquivo em excel, especificado, em um modelo disponível com uma pagina com o resumo de todos os cálculos obtidos, uma tabela que vai puxar de outras paginas do mesmo arquivo o preenchimento desse formulário, ou seja nesse diretório contem uma pagina chamada 'Report' que já está puxando das colunas de cada arquivo que vc criar"C:\Users\lgv_v\Documents\LUIZ\Modelo Planilha Final",
+ crie uma copia do arquivo e preencha as especificações abaixo. preciso que esse script preencha as outras paginas especificadas abaixo com o 'Quadro Resumo', (todos os arquivos com as tabelas definidas plotadas em cada  arquivo encontrado dessa amostra 'arquivo xx ', sendo cada arquivo com uma pagina diferente
+
+-no excel, criar nova pagina 'Quadro Resumo', para controle manual dos arquivos e das amostras, preencher com as seguintes colunas: "Amostra", preencher nome dos arquivos encontrados no banco de dados. criar coluna "Condição de moldagem", criar coluna "Método de preparação"(deixar a linha em branco),criar coluna "Determinação de umidade final"(deixar a linha em branco), criar coluna "p'(kpa)- Método A" preencher com a primeira linha do estagio de adensamento da coluna 'eff_camb_A', criar coluna "p'(kpa)- Método B" preencher com a primeira linha do estagio de adensamento da coluna 'eff_camb_B', criar coluna "Gs", preencher com o valor de spec_grav,  criar coluna 'e0', preencher com init_void_ratio, criar coluna "eC", preencher com post_cons_void, criar coluna 'eF'= spec_grav * w_f, criar coluna'su_A_final' = ultimo valor da tabela su_A /  primeiro valor da coluna eff_camb_A, criar coluna 'su_B' = ultimo valor da tabela su_B /  primeiro valor da coluna eff_camb_B, criar coluna 'su_A_max' = valor maximo da tabela su_A / primeiro valor de eff_camb_A, criar coluna 'su_B_max' = valor maximo da tabela su_B / primeiro valor de eff_camb_B
+
+-criar uma pagina para cada arquivo encontrado da mesma amostra, comente a parte das colunas necessarias especificar calculos.
+
+B- (stage time, cell pressure, back pressure, pore pressure)[calcular: b-value, stage time min]
+6 primeiras colunas, sendo 2 delas calculadas, stage do B
+
+
+adensamento (stage number, time since start of test(s), Time since start of stage (s), radial pressure, radial volume, back pressure, back volume, load cell, pore pressure, axial displacement) somente preencher
+coluna 8 a 18, somente preencher o stage de adensamento
+
+
+cislhamento(Stage Time	Stage Time	Cell Pressure	Back Pressure	Pore Pressure	Volume Change	Axial Displacement	Load Cell	Axial Strain	Corrected Deviator Stress	Effective Principal Stress Ratio	Induced Pore Pressure	p′	q)
+
+coluna 20 a 34, somente preencher o stage de cisalhamento
+

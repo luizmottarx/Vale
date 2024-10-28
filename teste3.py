@@ -132,6 +132,9 @@ class TableProcessor:
             df['dev_stress_A'] = df['load_cell_Original'] / (df['cur_area_A'] / 100000).replace(0, np.nan)
             df['dev_stress_B'] = df['load_cell_Original'] / (df['cur_area_B'] / 100000).replace(0, np.nan)
 
+            df['su_A'] = df['dev_stress_A'] / 2
+            df['su_B'] = df['dev_stress_B'] / 2
+
             # Instanciar METADADOS_PARTE2 com df e metadados após cálculos iniciais
             metadados_parte2 = METADADOS_PARTE2(df, metadados, init_dry_mass, v_0, vol_solid, v_w_f)
 
