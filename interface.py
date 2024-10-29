@@ -972,7 +972,7 @@ class InterfaceApp:
         if selection:
             index = selection[0]
             amostra_selecionada = self.amostra_listbox.get(index)
-            # Chamar a função que gera a planilha para a amostra selecionada
+            # Adjust the import statement if necessary
             try:
                 from PreencherExcel import gerar_planilha_para_amostra
                 gerar_planilha_para_amostra(amostra_selecionada)
@@ -981,8 +981,8 @@ class InterfaceApp:
                 messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
         else:
             messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
-       
 
+       
     # Gerenciamento de Usuários
     def add_user_screen(self):
         self.clear_screen()

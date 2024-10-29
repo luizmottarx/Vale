@@ -1,8 +1,6 @@
 import sqlite3
 import os
-from openpyxl import Workbook, load_workbook
-from openpyxl.utils import get_column_letter
-import openpyxl
+from openpyxl import load_workbook
 import numpy as np
 
 def safe_float_conversion(value):
@@ -12,9 +10,16 @@ def safe_float_conversion(value):
         return 0.0
 
 def gerar_planilha_para_amostra(amostra_selecionada):
-    modelo_planilha = r'C:\Users\lgv_v\Documents\LUIZ\Modelo Planilha Final\Modelo_Planilha_Final.xlsx'
+    modelo_planilha = r'C:\Users\lgv_v\Documents\LUIZ\Modelo Planilha Final\ModeloPlanilhaFinal.xlsx'
+    if not os.path.exists(modelo_planilha):
+        print(f"O modelo de planilha não foi encontrado em: {modelo_planilha}")
+        return
+
     wb = load_workbook(modelo_planilha)
-    novo_arquivo = os.path.join(r'C:\Users\lgv_v\Documents\LUIZ\Modelo Planilha Final', f'Planilha_Preenchida_{amostra_selecionada}.xlsx')
+    novo_arquivo = os.path.join(
+        r'C:\Users\lgv_v\Documents\LUIZ\Modelo Planilha Final',
+        f'Planilha_Preenchida_{amostra_selecionada}.xlsx'
+    )
     wb.save(novo_arquivo)
     wb = load_workbook(novo_arquivo)
 
@@ -166,11 +171,16 @@ def gerar_planilha_para_amostra(amostra_selecionada):
         pore_pressure_B = B_data.get('pore_press_Original', [])
 
         b_values = []
-        for rp, pp in zip(cell_pressure_B, pore_pressure_B):
-            delta_rp = rp - cell_pressure_B[0]
-            delta_pp = pp - pore_pressure_B[0]
-            b = delta_pp / delta_rp if delta_rp != 0 else 0
-            b_values.append(b)
+        if cell_pressure_B and pore_pressure_B:
+            initial_rp = cell_pressure_B[0]
+            initial_pp = pore_pressure_B[0]
+            for rp, pp in zip(cell_pressure_B, pore_pressure_B):
+                delta_rp = rp - initial_rp
+                delta_pp = pp - initial_pp
+                b = delta_pp / delta_rp if delta_rp != 0 else 0
+                b_values.append(b)
+        else:
+            b_values = [0] * len(B_stage_time)
 
         stage_time_min = [t / 60 for t in B_stage_time]
 
