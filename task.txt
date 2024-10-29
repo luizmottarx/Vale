@@ -17,4 +17,6 @@ coluna 8 a 18, somente preencher o stage de adensamento
 cislhamento(Stage Time	Stage Time	Cell Pressure	Back Pressure	Pore Pressure	Volume Change	Axial Displacement	Load Cell	Axial Strain	Corrected Deviator Stress	Effective Principal Stress Ratio	Induced Pore Pressure	p′	q)
 
 coluna 20 a 34, somente preencher o stage de cisalhamento
+///////////////////////
 
+preencher planilha final cliente
