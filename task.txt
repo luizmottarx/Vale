@@ -1,22 +1,28 @@
-
-automation python, em somente um arquivo em excel, especificado, em um modelo disponível com uma pagina com o resumo de todos os cálculos obtidos, uma tabela que vai puxar de outras paginas do mesmo arquivo o preenchimento desse formulário, ou seja nesse diretório contem uma pagina chamada 'Report' que já está puxando das colunas de cada arquivo que vc criar"C:\Users\lgv_v\Documents\LUIZ\Modelo Planilha Final",
- crie uma copia do arquivo e preencha as especificações abaixo. preciso que esse script preencha as outras paginas especificadas abaixo com o 'Quadro Resumo', (todos os arquivos com as tabelas definidas plotadas em cada  arquivo encontrado dessa amostra 'arquivo xx ', sendo cada arquivo com uma pagina diferente
-
--no excel, criar nova pagina 'Quadro Resumo', para controle manual dos arquivos e das amostras, preencher com as seguintes colunas: "Amostra", preencher nome dos arquivos encontrados no banco de dados. criar coluna "Condição de moldagem", criar coluna "Método de preparação"(deixar a linha em branco),criar coluna "Determinação de umidade final"(deixar a linha em branco), criar coluna "p'(kpa)- Método A" preencher com a primeira linha do estagio de adensamento da coluna 'eff_camb_A', criar coluna "p'(kpa)- Método B" preencher com a primeira linha do estagio de adensamento da coluna 'eff_camb_B', criar coluna "Gs", preencher com o valor de spec_grav,  criar coluna 'e0', preencher com init_void_ratio, criar coluna "eC", preencher com post_cons_void, criar coluna 'eF'= spec_grav * w_f, criar coluna'su_A_final' = ultimo valor da tabela su_A /  primeiro valor da coluna eff_camb_A, criar coluna 'su_B' = ultimo valor da tabela su_B /  primeiro valor da coluna eff_camb_B, criar coluna 'su_A_max' = valor maximo da tabela su_A / primeiro valor de eff_camb_A, criar coluna 'su_B_max' = valor maximo da tabela su_B / primeiro valor de eff_camb_B
-
--criar uma pagina para cada arquivo encontrado da mesma amostra, comente a parte das colunas necessarias especificar calculos.
-
-B- (stage time, cell pressure, back pressure, pore pressure)[calcular: b-value, stage time min]
-6 primeiras colunas, sendo 2 delas calculadas, stage do B
+fiz uma alteração no arquivo modelo, adicionando além da pagina modelo 'Report', adicionei 'ModeloIndividual', essa pagina tem que ser preenchida com informações do banco de dados, nas células especificas, pois elas são cálculos pré-definidos,
+fazer duplicação da pagina 'ModeloIndividual' no arquivo modelo e preencher as seguintes celulas dos seguintes estagios(os estagios sao dinamicos, o valor de B ,adensamento e cisalhamento foram definidos e salvos no banco de dados):
 
 
-adensamento (stage number, time since start of test(s), Time since start of stage (s), radial pressure, radial volume, back pressure, back volume, load cell, pore pressure, axial displacement) somente preencher
-coluna 8 a 18, somente preencher o stage de adensamento
+B--- somente o stage do valor de B----(não precisa preencher pois ja esta nomeado na pagina ModeloIndividual) 
+Stage Time Second= celula D10 pra baixo(preencher oque vem do banco de dados)
+Cell Pressure Kpa = celula F10 pra baixo (preencher)
+Back Pressure Kpa = celula G10 pra baixo (preencher)
+Pore Pressure Kpa = célula H10 pra baixo (preencher)
 
 
-cislhamento(Stage Time	Stage Time	Cell Pressure	Back Pressure	Pore Pressure	Volume Change	Axial Displacement	Load Cell	Axial Strain	Corrected Deviator Stress	Effective Principal Stress Ratio	Induced Pore Pressure	p′	q)
+Cisalhamento--- somente o stage do valor do Cisalhamento
+os cabeçalhos são da linha anterior as abaixo : (não precisa preencher pois ja esta nomeado na pagina ModeloIndividual) 
+ preencher dessas células, para baixo: U10, V10, W10, X10, Y10, Z10, AA10, AB10, AC10, AD10, AE10, AF10, AG10, AH10
 
-coluna 20 a 34, somente preencher o stage de cisalhamento
-///////////////////////
 
-preencher planilha final cliente
+Adensamento--- somente o stage do valor de Adensamento 
+os cabeçalhos são = A09,AP9,AQ9,AR9,AS9,AT9,AU9,AV9,AW9,AX9 (não precisa preencher pois ja esta nomeado na pagina ModeloIndividual) 
+preencher dessas células, para baixo: AO10, AP10, AQ10, AR10, AS10, AT10, AU10, AV10, AW10, AX10
+
+
+
+Cada arquivo é relacionado com TipoEnsaio e Amostra, ou seja, a planilha final vai conter todos os arquivos que possuem a mesma Amostra e o mesmo TipoEnsaio.(preciso que na interface, mostre qual amostra o usuário quer gerar a planilha, depois qual TipoEnsaio daquela amostra ele quer, por exemplo, nos arquivos individuais o nome completo é :AM00123-12_TIR_S_Seq.1.gds, AM00123-12_TIR_S_Seq.2.gds, AM00123-12_TIR_S_Seq.3.gds, ou seja, todos esses arquivos tem o mesmo TipoEnsaio 'TIR_S', onde vão ter 3 páginas no excel preenchidas além da pagina 'Report'), depois de selecionar o TipoEnsaio desejado, escolher a Amostra, gerar a planilha filtrada corretamente.
+
+
+
+
+
