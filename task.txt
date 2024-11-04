@@ -1,28 +1,23 @@
 fiz uma alteração no arquivo modelo, adicionando além da pagina modelo 'Report', adicionei 'ModeloIndividual', essa pagina tem que ser preenchida com informações do banco de dados, nas células especificas, pois elas são cálculos pré-definidos,
 fazer duplicação da pagina 'ModeloIndividual' no arquivo modelo e preencher as seguintes celulas dos seguintes estagios(os estagios sao dinamicos, o valor de B ,adensamento e cisalhamento foram definidos e salvos no banco de dados):
-
-
 B--- somente o stage do valor de B----(não precisa preencher pois ja esta nomeado na pagina ModeloIndividual) 
 Stage Time Second= celula D10 pra baixo(preencher oque vem do banco de dados)
 Cell Pressure Kpa = celula F10 pra baixo (preencher)
 Back Pressure Kpa = celula G10 pra baixo (preencher)
 Pore Pressure Kpa = célula H10 pra baixo (preencher)
-
-
 Cisalhamento--- somente o stage do valor do Cisalhamento
 os cabeçalhos são da linha anterior as abaixo : (não precisa preencher pois ja esta nomeado na pagina ModeloIndividual) 
  preencher dessas células, para baixo: U10, V10, W10, X10, Y10, Z10, AA10, AB10, AC10, AD10, AE10, AF10, AG10, AH10
-
-
 Adensamento--- somente o stage do valor de Adensamento 
 os cabeçalhos são = A09,AP9,AQ9,AR9,AS9,AT9,AU9,AV9,AW9,AX9 (não precisa preencher pois ja esta nomeado na pagina ModeloIndividual) 
 preencher dessas células, para baixo: AO10, AP10, AQ10, AR10, AS10, AT10, AU10, AV10, AW10, AX10
-
-
-
 Cada arquivo é relacionado com TipoEnsaio e Amostra, ou seja, a planilha final vai conter todos os arquivos que possuem a mesma Amostra e o mesmo TipoEnsaio.(preciso que na interface, mostre qual amostra o usuário quer gerar a planilha, depois qual TipoEnsaio daquela amostra ele quer, por exemplo, nos arquivos individuais o nome completo é :AM00123-12_TIR_S_Seq.1.gds, AM00123-12_TIR_S_Seq.2.gds, AM00123-12_TIR_S_Seq.3.gds, ou seja, todos esses arquivos tem o mesmo TipoEnsaio 'TIR_S', onde vão ter 3 páginas no excel preenchidas além da pagina 'Report'), depois de selecionar o TipoEnsaio desejado, escolher a Amostra, gerar a planilha filtrada corretamente.
 
 
-
-
-
+04/11
+CORREÇÕES:
+-modelagam do banco por SQL, nome da Amostra e TipoEnsaio, corrigir 
+-conferir escalas de todos os gráficos
+-adicionar visualização no grafico de amostras, adicionar botão para ver graficos selecionados da amostra, podendo conter quantos o usuário selecionar
+-adicionar uma visualização, quando passar o mouse em cima das linhas do gráfico da amostra mostrar, ser iterativo, mostrar valor de onde o mouse esta localizado e qual
+arquivo individual é.
