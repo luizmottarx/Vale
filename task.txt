@@ -21,3 +21,5 @@ CORREÇÕES:
 -adicionar visualização no grafico de amostras, adicionar botão para ver graficos selecionados da amostra, podendo conter quantos o usuário selecionar
 -adicionar uma visualização, quando passar o mouse em cima das linhas do gráfico da amostra mostrar, ser iterativo, mostrar valor de onde o mouse esta localizado e qual
 arquivo individual é.
+
+****Verificar como preencher excel, tamanho do arquivo, desempenho da aplicação****
