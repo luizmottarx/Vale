@@ -1,3 +1,4 @@
+#interface.py
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
 from tkinter import messagebox, filedialog
@@ -65,6 +66,16 @@ class DatabaseManager:
 
     def get_all_users(self):
         cursor = self.conn.execute("SELECT login FROM usuarios")
+        return [row[0] for row in cursor.fetchall()]
+
+    def get_tipo_ensaio_by_amostra(self, amostra):
+        cursor = self.conn.execute("""
+            SELECT DISTINCT te.tipo
+            FROM Ensaio e
+            JOIN Amostra a ON e.id_amostra = a.id_amostra
+            JOIN TipoEnsaio te ON e.id_tipo = te.id_tipo
+            WHERE a.amostra = ?
+        """, (amostra,))
         return [row[0] for row in cursor.fetchall()]
 
     def delete_user(self, login):
@@ -956,31 +967,56 @@ class InterfaceApp:
         frame.pack(pady=20)
 
         tk.Label(frame, text="Selecione uma amostra para gerar a planilha:").pack(pady=10)
-        self.amostra_listbox = tk.Listbox(frame, width=80, height=20)
+        self.amostra_listbox = tk.Listbox(frame, width=80, height=10)
         for amostra in amostras:
             self.amostra_listbox.insert(tk.END, amostra)
         self.amostra_listbox.pack()
 
-        button_frame = tk.Frame(frame)
-        button_frame.pack(pady=10)
+        tk.Button(frame, text="Avançar", command=self.selecionar_tipo_ensaio, width=15).pack(pady=10)
 
-        tk.Button(button_frame, text="Gerar Planilha", command=self.gerar_planilha_selecionada, width=15).grid(row=0, column=0, padx=10)
-        tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
+        tk.Button(frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).pack(pady=10)
 
-    def gerar_planilha_selecionada(self):
+    def selecionar_tipo_ensaio(self):
         selection = self.amostra_listbox.curselection()
         if selection:
             index = selection[0]
-            amostra_selecionada = self.amostra_listbox.get(index)
-            # Adjust the import statement if necessary
+            self.amostra_selecionada = self.amostra_listbox.get(index)
+            tipos_ensaio = self.db_manager.get_tipo_ensaio_by_amostra(self.amostra_selecionada)
+            if not tipos_ensaio:
+                messagebox.showinfo("Informação", "Nenhum TipoEnsaio encontrado para a amostra selecionada.")
+                return
+
+            self.clear_screen()
+            self.root.title("Selecionar TipoEnsaio")
+
+            frame = tk.Frame(self.root)
+            frame.pack(pady=20)
+
+            tk.Label(frame, text="Selecione o TipoEnsaio para gerar a planilha:").pack(pady=10)
+            self.tipo_ensaio_listbox = tk.Listbox(frame, width=80, height=10)
+            for tipo in tipos_ensaio:
+                self.tipo_ensaio_listbox.insert(tk.END, tipo)
+            self.tipo_ensaio_listbox.pack()
+
+            tk.Button(frame, text="Gerar Planilha", command=self.gerar_planilha_selecionada, width=15).pack(pady=10)
+
+            tk.Button(frame, text="Voltar", command=self.gerar_planilha_cliente_screen, width=15).pack(pady=10)
+        else:
+            messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
+
+    def gerar_planilha_selecionada(self):
+        selection = self.tipo_ensaio_listbox.curselection()
+        if selection:
+            index = selection[0]
+            tipo_ensaio_selecionado = self.tipo_ensaio_listbox.get(index)
             try:
                 from PreencherExcel import gerar_planilha_para_amostra
-                gerar_planilha_para_amostra(amostra_selecionada)
-                messagebox.showinfo("Sucesso", f"Planilha gerada com sucesso para a amostra '{amostra_selecionada}'.")
+                gerar_planilha_para_amostra(self.amostra_selecionada, tipo_ensaio_selecionado)
+                messagebox.showinfo("Sucesso", f"Planilha gerada com sucesso para a amostra '{self.amostra_selecionada}' e TipoEnsaio '{tipo_ensaio_selecionado}'.")
             except Exception as e:
                 messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
         else:
-            messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
+            messagebox.showerror("Erro", "Nenhum TipoEnsaio selecionado!")
 
        
     # Gerenciamento de Usuários
