@@ -1,5 +1,6 @@
 #interface.py
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 import tkinter as tk
 from tkinter import messagebox, filedialog
 import sqlite3
@@ -10,6 +11,7 @@ import matplotlib.pyplot as plt
 from teste1 import FileProcessor
 from teste2 import StageProcessor
 from teste3 import TableProcessor, CisalhamentoData
+import mplcursors
 import random
 import numpy as np
 import pandas as pd
@@ -67,6 +69,29 @@ class DatabaseManager:
     def get_all_users(self):
         cursor = self.conn.execute("SELECT login FROM usuarios")
         return [row[0] for row in cursor.fetchall()]
+    
+    def get_data_for_files(self, files):
+        placeholders = ', '.join('?' for _ in files)
+        query = f"""
+            SELECT et.*, e.NomeCompleto
+            FROM EnsaiosTriaxiais et
+            JOIN Ensaio e ON et.id_ensaio = e.id_ensaio
+            WHERE e.NomeCompleto IN ({placeholders}) AND e.statusIndividual != 'Refugado'
+        """
+        cursor = self.conn.execute(query, files)
+        columns = [description[0] for description in cursor.description]
+        data = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return data
+
+
+    def get_status_individual(self, nome_completo):
+        cursor = self.conn.execute("SELECT statusIndividual FROM Ensaio WHERE NomeCompleto = ?", (nome_completo,))
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        else:
+            return None
+
 
     def get_tipo_ensaio_by_amostra(self, amostra):
         cursor = self.conn.execute("""
@@ -87,15 +112,27 @@ class DatabaseManager:
         cursor = self.conn.execute("SELECT amostra FROM Amostra")
         return [row[0] for row in cursor.fetchall()]
 
-    def get_ensaios_by_amostra(self, amostra):
+    def get_ensaios_by_amostra(self, amostra, status_individual=None, exclude_status=None):
         cursor = self.conn.execute("SELECT id_amostra FROM Amostra WHERE amostra = ?", (amostra,))
         row = cursor.fetchone()
         if row:
             id_amostra = row[0]
-            cursor = self.conn.execute("SELECT NomeCompleto FROM Ensaio WHERE id_amostra = ?", (id_amostra,))
+            if status_individual:
+                cursor = self.conn.execute(
+                    "SELECT NomeCompleto FROM Ensaio WHERE id_amostra = ? AND statusIndividual = ?",
+                    (id_amostra, status_individual)
+                )
+            elif exclude_status:
+                cursor = self.conn.execute(
+                    "SELECT NomeCompleto FROM Ensaio WHERE id_amostra = ? AND statusIndividual != ?",
+                    (id_amostra, exclude_status)
+                )
+            else:
+                cursor = self.conn.execute("SELECT NomeCompleto FROM Ensaio WHERE id_amostra = ?", (id_amostra,))
             return [row[0] for row in cursor.fetchall()]
         else:
             return []
+
 
     def update_status_amostra(self, amostra, status):
         with self.conn:
@@ -118,17 +155,23 @@ class DatabaseManager:
                 messagebox.showinfo("Status Atualizado", f"O status do arquivo '{arquivo}' foi alterado para '{status}'.")
 
 
+    def get_arquivos_by_status_individual(self, status):
+        cursor = self.conn.execute("SELECT NomeCompleto FROM Ensaio WHERE statusIndividual = ?", (status,))
+        return [row[0] for row in cursor.fetchall()]
+    
+
     def get_data_for_amostra(self, amostra):
         cursor = self.conn.execute("""
-            SELECT et.*
+            SELECT et.*, e.NomeCompleto
             FROM EnsaiosTriaxiais et
             JOIN Ensaio e ON et.id_ensaio = e.id_ensaio
             JOIN Amostra a ON e.id_amostra = a.id_amostra
-            WHERE a.amostra = ?
+            WHERE a.amostra = ? AND e.statusIndividual != 'Refugado'
         """, (amostra,))
         columns = [description[0] for description in cursor.description]
         data = [dict(zip(columns, row)) for row in cursor.fetchall()]
         return data
+
 
     def get_data_for_file(self, nome_completo):
         cursor = self.conn.execute("""
@@ -195,6 +238,53 @@ class InterfaceApp:
 
         tk.Button(frame, text="Login", command=self.check_login).grid(row=2, column=0, columnspan=2, pady=20)
 
+    def filtrar_arquivos(self, graph_window, amostra_selecionada):
+        # Criar uma nova janela para o filtro
+        filter_window = tk.Toplevel(graph_window)
+        filter_window.title("Filtrar Arquivos")
+        filter_window.geometry("400x400")
+
+        tk.Label(filter_window, text="Selecione os arquivos para visualizar:").pack(pady=10)
+
+        # Criar o canvas e a barra de rolagem
+        canvas = tk.Canvas(filter_window)
+        scroll_y = tk.Scrollbar(filter_window, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scroll_y.set)
+
+        scroll_frame = tk.Frame(canvas)
+        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+        canvas.pack(side="left", fill="both", expand=True)
+        scroll_y.pack(side="right", fill="y")
+
+        # Frame para os checkboxes dentro do scroll_frame
+        checkbox_frame = tk.Frame(scroll_frame)
+        checkbox_frame.pack()
+
+        # Dicionário para armazenar os checkboxes
+        checkboxes = {}
+        for ensaio, var in self.selected_files_var.items():
+            cb = tk.Checkbutton(checkbox_frame, text=ensaio, variable=var)
+            cb.pack(anchor='w')
+            checkboxes[ensaio] = cb
+
+        def apply_filter():
+            # Fechar a janela de filtro
+            filter_window.destroy()
+            # Fechar a janela de gráficos atual
+            graph_window.destroy()
+            # Replotar os gráficos com a seleção atualizada
+            self.plotar_graficos_amostra(amostra_selecionada)
+
+        # Botões "Aplicar" e "Cancelar"
+        button_frame = tk.Frame(scroll_frame)
+        button_frame.pack(pady=10)
+
+        tk.Button(button_frame, text="Aplicar", command=apply_filter, width=15).pack(side="left", padx=5)
+        tk.Button(button_frame, text="Cancelar", command=filter_window.destroy, width=15).pack(side="right", padx=5)
+
+
     def check_login(self):
         user = self.user_entry.get()
         password = self.password_entry.get()
@@ -229,9 +319,52 @@ class InterfaceApp:
 
         tk.Button(frame, text="Encontrar Arquivos", command=self.find_files, width=30).pack(pady=10)
         tk.Button(frame, text="Verificar Ensaio", command=self.verificar_ensaio_screen, width=30).pack(pady=10)
-        # Adicionar o novo botão aqui
+        tk.Button(frame, text="Ver Arquivos Aprovados", command=self.ver_arquivos_aprovados, width=30).pack(pady=10)
+        tk.Button(frame, text="Ver Arquivos Refugados", command=self.ver_arquivos_refugados, width=30).pack(pady=10)
         tk.Button(frame, text="Gerar Planilha Cliente", command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
         tk.Button(frame, text="Sair", command=self.root.quit, width=30).pack(pady=10)
+
+
+    def ver_arquivos_aprovados(self):
+        self.ver_arquivos_status_individual('Aprovado')
+
+    def ver_arquivos_refugados(self):
+        self.ver_arquivos_status_individual('Refugado')
+
+    def ver_arquivos_status_individual(self, status):
+        self.clear_screen()
+        self.root.title(f"Arquivos com Status '{status}'")
+
+        arquivos = self.db_manager.get_arquivos_by_status_individual(status)
+        if not arquivos:
+            messagebox.showinfo("Informação", f"Nenhum arquivo encontrado com status '{status}'.")
+            self.create_main_menu()
+            return
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text=f"Selecione um arquivo com status '{status}':").pack(pady=10)
+        self.arquivo_listbox = tk.Listbox(frame, width=80, height=20)
+        for arquivo in arquivos:
+            self.arquivo_listbox.insert(tk.END, arquivo)
+        self.arquivo_listbox.pack()
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=10)
+
+        tk.Button(button_frame, text="Ver Gráfico", command=self.ver_grafico_arquivo_selecionado, width=15).grid(row=0, column=0, padx=10)
+        tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
+
+    def ver_grafico_arquivo_selecionado(self):
+        selection = self.arquivo_listbox.curselection()
+        if selection:
+            index = selection[0]
+            arquivo_selecionado = self.arquivo_listbox.get(index)
+            data = self.db_manager.get_data_for_file(arquivo_selecionado)
+            self.plotar_graficos(data, f"Gráficos do Arquivo {arquivo_selecionado}")
+        else:
+            messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
 
 
     # Fluxo Encontrar Arquivos
@@ -477,8 +610,9 @@ class InterfaceApp:
         self.clear_screen()
         self.root.title("Verificar Ensaio")
 
-        amostras = self.db_manager.get_amostras()
-        if not amostras:
+        # Obter todas as amostras
+        all_amostras = self.db_manager.get_amostras()
+        if not all_amostras:
             messagebox.showinfo("Informação", "Nenhuma amostra encontrada.")
             self.create_main_menu()
             return
@@ -486,17 +620,40 @@ class InterfaceApp:
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
 
+        # Campo de busca
+        tk.Label(frame, text="Buscar Amostra:").pack(pady=5)
+        self.search_var = tk.StringVar()
+        self.search_var.trace("w", lambda name, index, mode: self.update_amostra_list())
+        self.search_entry = tk.Entry(frame, textvariable=self.search_var)
+        self.search_entry.pack(pady=5)
+
+        # Lista de amostras
         tk.Label(frame, text="Selecione uma amostra:").pack(pady=10)
         self.amostra_listbox = tk.Listbox(frame, width=80, height=20)
-        for amostra in amostras:
-            self.amostra_listbox.insert(tk.END, amostra)
         self.amostra_listbox.pack()
+
+        # Inicializar lista de amostras
+        self.all_amostras = all_amostras
+        self.filtered_amostras = all_amostras.copy()
+        self.update_amostra_list()
 
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
         tk.Button(button_frame, text="Avançar", command=self.avancar_amostra, width=15).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
+
+    def update_amostra_list(self):
+        search_text = self.search_var.get().strip().lower()
+        if search_text == "":
+            self.filtered_amostras = self.all_amostras.copy()
+        else:
+            self.filtered_amostras = [amostra for amostra in self.all_amostras if search_text in amostra.lower()]
+        # Atualizar a listbox
+        self.amostra_listbox.delete(0, tk.END)
+        for amostra in self.filtered_amostras:
+            self.amostra_listbox.insert(tk.END, amostra)
+
 
     def avancar_amostra(self):
         selection = self.amostra_listbox.curselection()
@@ -507,11 +664,35 @@ class InterfaceApp:
         else:
             messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
 
+
     def mostrar_ensaios_amostra(self, amostra_selecionada):
-        self.clear_screen()
+        # Remova self.clear_screen()
         self.root.title(f"Arquivos da Amostra {amostra_selecionada}")
 
-        ensaios = self.db_manager.get_ensaios_by_amostra(amostra_selecionada)
+        # Obter todos os arquivos da amostra, excluindo os com status 'Refugado'
+        ensaios = self.db_manager.get_ensaios_by_amostra(amostra_selecionada, exclude_status='Refugado')
+        if not ensaios:
+            messagebox.showinfo("Informação", "Nenhum ensaio encontrado para a amostra selecionada.")
+            self.verificar_ensaio_screen()
+            return
+
+        # Inicializar a variável selected_files_var com todos os arquivos selecionados
+        self.selected_files_var = {}
+        for ensaio in ensaios:
+            var = tk.BooleanVar(value=True)
+            self.selected_files_var[ensaio] = var
+
+        # Plotar os gráficos com todos os arquivos selecionados
+        self.plotar_graficos_amostra(amostra_selecionada)
+
+
+
+    def selecionar_arquivos_amostra(self, amostra_selecionada):
+        self.clear_screen()
+        self.root.title(f"Selecionar Arquivos para Amostra {amostra_selecionada}")
+
+        # Obter ensaios com statusIndividual != 'Refugado'
+        ensaios = self.db_manager.get_ensaios_by_amostra(amostra_selecionada, exclude_status='Refugado')
         if not ensaios:
             messagebox.showinfo("Informação", "Nenhum ensaio encontrado para a amostra selecionada.")
             self.verificar_ensaio_screen()
@@ -520,18 +701,24 @@ class InterfaceApp:
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
 
-        tk.Label(frame, text=f"Arquivos encontrados para a amostra {amostra_selecionada}:").pack(pady=10)
-        self.ensaio_listbox = tk.Listbox(frame, width=80, height=20)
+        tk.Label(frame, text=f"Selecione os arquivos para visualizar nos gráficos da amostra {amostra_selecionada}:").pack(pady=10)
+
+        self.selected_files_var = {}
         for ensaio in ensaios:
-            self.ensaio_listbox.insert(tk.END, ensaio)
-        self.ensaio_listbox.pack()
+            # Por padrão, marcar os arquivos com statusIndividual = 'Aprovado'
+            status_individual = self.db_manager.get_status_individual(ensaio)
+            var = tk.BooleanVar(value=(status_individual == 'Aprovado'))
+            self.selected_files_var[ensaio] = var
+            cb = tk.Checkbutton(frame, text=ensaio, variable=var)
+            cb.pack(anchor='w')
 
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
-        tk.Button(button_frame, text="Ver Gráficos da Amostra", command=lambda: self.plotar_graficos_amostra(amostra_selecionada), width=25).grid(row=0, column=0, padx=5)
-        tk.Button(button_frame, text="Verificar Arquivo Individual", command=self.verificar_arquivo_individual, width=25).grid(row=0, column=1, padx=5)
-        tk.Button(button_frame, text="Voltar", command=self.verificar_ensaio_screen, width=25).grid(row=0, column=2, padx=5)
+        tk.Button(button_frame, text="Plotar Gráficos", command=lambda: self.plotar_graficos_amostra(amostra_selecionada), width=20).grid(row=0, column=0, padx=5)
+        tk.Button(button_frame, text="Voltar", command=self.verificar_ensaio_screen, width=20).grid(row=0, column=1, padx=5)
+
+
 
     def verificar_arquivo_individual(self):
         selection = self.ensaio_listbox.curselection()
@@ -571,10 +758,16 @@ class InterfaceApp:
     # Funções de Plotagem de Gráficos Unificadas
     def plotar_graficos_amostra(self, amostra_selecionada):
         try:
-            # Obter os dados de todos os arquivos da amostra
-            data = self.db_manager.get_data_for_amostra(amostra_selecionada)
+            # Obter os arquivos selecionados pelo usuário
+            selected_files = [filename for filename, var in self.selected_files_var.items() if var.get()]
+            if not selected_files:
+                messagebox.showerror("Erro", "Nenhum arquivo selecionado para plotar.")
+                return
+
+            # Obter os dados dos arquivos selecionados, excluindo os com status 'Refugado'
+            data = self.db_manager.get_data_for_files(selected_files)
             if not data:
-                messagebox.showinfo("Informação", "Nenhum dado encontrado para a amostra selecionada.")
+                messagebox.showinfo("Informação", "Nenhum dado encontrado para os arquivos selecionados.")
                 return
 
             # Organizar os dados por arquivo (NomeCompleto)
@@ -585,21 +778,8 @@ class InterfaceApp:
                     data_by_file[arquivo] = []
                 data_by_file[arquivo].append(row)
 
-            # Inicializar listas para cada par de dados
-            void_ratio_A = {}
-            void_ratio_B = {}
-            eff_camb_A = {}
-            eff_camb_B = {}
-            dev_stress_A = {}
-            dev_stress_B = {}
-            nqp_A = {}
-            nqp_B = {}
-            ax_strain = {}
-            vol_strain = {}
-            du_kpa_A = {}
-            du_kpa_B = {}
-            m_A = {}
-            m_B = {}
+            # Inicializar datasets
+            datasets = {}
 
             for arquivo, rows in data_by_file.items():
                 # Obter metadados para o arquivo
@@ -630,291 +810,82 @@ class InterfaceApp:
                 if df_cisalhamento.empty:
                     continue  # Se não há dados para o estágio de cisalhamento, pular este arquivo
 
-                # Agora, adicionar os dados às listas
-                void_ratio_A[arquivo] = df_cisalhamento['void_ratio_A'].tolist()
-                void_ratio_B[arquivo] = df_cisalhamento['void_ratio_B'].tolist()
-                eff_camb_A[arquivo] = df_cisalhamento['eff_camb_A'].tolist()
-                eff_camb_B[arquivo] = df_cisalhamento['eff_camb_B'].tolist()
-                dev_stress_A[arquivo] = df_cisalhamento['dev_stress_A'].tolist()
-                dev_stress_B[arquivo] = df_cisalhamento['dev_stress_B'].tolist()
-                nqp_A[arquivo] = df_cisalhamento['nqp_A'].tolist()
-                nqp_B[arquivo] = df_cisalhamento['nqp_B'].tolist()
-                ax_strain[arquivo] = df_cisalhamento['ax_strain'].tolist()
-                vol_strain[arquivo] = df_cisalhamento['vol_strain'].tolist()
-                du_kpa_A[arquivo] = df_cisalhamento['du_kpa_A'].tolist()
-                du_kpa_B[arquivo] = df_cisalhamento['du_kpa_B'].tolist()
-                m_A[arquivo] = df_cisalhamento['m_A'].tolist()
-                m_B[arquivo] = df_cisalhamento['m_B'].tolist()
+                # Armazenar os dados para plotagem
+                datasets[arquivo] = df_cisalhamento
 
             # Verificar se há dados para plotar
-            if not void_ratio_A:
-                messagebox.showinfo("Informação", "Nenhum dado encontrado para o estágio de cisalhamento nos arquivos selecionados.")
+            if not datasets:
+                messagebox.showinfo("Informação", "Nenhum dado encontrado para os arquivos selecionados no estágio de cisalhamento.")
                 return
 
             # Criar o layout dos gráficos (3x2 layout)
-            fig, axs = plt.subplots(3, 2, figsize=(12, 28))
-
-            # Função para gerar uma cor aleatória
-            def random_color():
-                return [random.random() for _ in range(3)]
+            fig, axs = plt.subplots(3, 2, figsize=(12, 18))
 
             # Dicionário para armazenar as cores usadas em cada arquivo
+            color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
             color_dict = {}
 
-            # Plotar os gráficos com cores diferentes para cada arquivo
-            for arquivo in void_ratio_A.keys():
-                color = random_color()  # Cor aleatória para cada arquivo
-                color_dict[arquivo] = color  # Armazenar a cor para a legenda
+            # Lista para armazenar os artistas (scatter plots) para interatividade
+            artists = []
 
-                # Plot void_ratio_A * eff_camb_A
-                axs[0, 0].scatter(eff_camb_A[arquivo], void_ratio_A[arquivo], color=color, label=arquivo)
+            # Plotar os gráficos com cores diferentes para cada arquivo
+            for idx, (arquivo, df_cisalhamento) in enumerate(datasets.items()):
+                color = color_cycle[idx % len(color_cycle)]
+                color_dict[arquivo] = color  # Armazenar a cor para referência
+
+                # Plot void_ratio_A x eff_camb_A
+                sc = axs[0, 0].scatter(df_cisalhamento['eff_camb_A'], df_cisalhamento['void_ratio_A'],
+                                    color=color, label=arquivo)
                 axs[0, 0].set_xlabel('eff_camb_A')
                 axs[0, 0].set_ylabel('void_ratio_A')
-                axs[0, 0].set_title('void_ratio_A * eff_camb_A')
+                axs[0, 0].set_title('void_ratio_A x eff_camb_A')
+                artists.append(sc)
 
-                # Plot void_ratio_B * eff_camb_B
-                axs[0, 1].scatter(eff_camb_B[arquivo], void_ratio_B[arquivo], color=color, label=arquivo)
+                # Plot void_ratio_B x eff_camb_B
+                sc = axs[0, 1].scatter(df_cisalhamento['eff_camb_B'], df_cisalhamento['void_ratio_B'],
+                                    color=color, label=arquivo)
                 axs[0, 1].set_xlabel('eff_camb_B')
                 axs[0, 1].set_ylabel('void_ratio_B')
-                axs[0, 1].set_title('void_ratio_B * eff_camb_B')
+                axs[0, 1].set_title('void_ratio_B x eff_camb_B')
+                artists.append(sc)
 
-                # Plot dev_stress_A * eff_camb_A
-                axs[1, 0].scatter(eff_camb_A[arquivo], dev_stress_A[arquivo], color=color, label=arquivo)
+                # Plot dev_stress_A x eff_camb_A
+                sc = axs[1, 0].scatter(df_cisalhamento['eff_camb_A'], df_cisalhamento['dev_stress_A'],
+                                    color=color, label=arquivo)
                 axs[1, 0].set_xlabel('eff_camb_A')
                 axs[1, 0].set_ylabel('dev_stress_A')
-                axs[1, 0].set_title('dev_stress_A * eff_camb_A')
+                axs[1, 0].set_title('dev_stress_A x eff_camb_A')
+                artists.append(sc)
 
-                # Plot dev_stress_B * eff_camb_B
-                axs[1, 1].scatter(eff_camb_B[arquivo], dev_stress_B[arquivo], color=color, label=arquivo)
+                # Plot dev_stress_B x eff_camb_B
+                sc = axs[1, 1].scatter(df_cisalhamento['eff_camb_B'], df_cisalhamento['dev_stress_B'],
+                                    color=color, label=arquivo)
                 axs[1, 1].set_xlabel('eff_camb_B')
                 axs[1, 1].set_ylabel('dev_stress_B')
-                axs[1, 1].set_title('dev_stress_B * eff_camb_B')
+                axs[1, 1].set_title('dev_stress_B x eff_camb_B')
+                artists.append(sc)
 
-                # Plot nqp_A * ax_strain
-                axs[2, 0].scatter(ax_strain[arquivo], nqp_A[arquivo], color=color, label=arquivo)
+                # Plot nqp_A x ax_strain
+                sc = axs[2, 0].scatter(df_cisalhamento['ax_strain'], df_cisalhamento['nqp_A'],
+                                    color=color, label=arquivo)
                 axs[2, 0].set_xlabel('ax_strain')
                 axs[2, 0].set_ylabel('nqp_A')
-                axs[2, 0].set_title('nqp_A * ax_strain')
+                axs[2, 0].set_title('nqp_A x ax_strain')
+                artists.append(sc)
 
-                # Plot nqp_B * ax_strain
-                axs[2, 1].scatter(ax_strain[arquivo], nqp_B[arquivo], color=color, label=arquivo)
+                # Plot nqp_B x ax_strain
+                sc = axs[2, 1].scatter(df_cisalhamento['ax_strain'], df_cisalhamento['nqp_B'],
+                                    color=color, label=arquivo)
                 axs[2, 1].set_xlabel('ax_strain')
                 axs[2, 1].set_ylabel('nqp_B')
-                axs[2, 1].set_title('nqp_B * ax_strain')
-
-            plt.tight_layout()
-
-            # Criar a janela de gráficos com barra de rolagem, sem bordas, 1280x960
-            graph_window = tk.Toplevel(self.root)
-            graph_window.title(f"Gráficos da Amostra {amostra_selecionada}")
-            graph_window.geometry("1280x960")
-
-            # Habilitar botões de minimizar, maximizar e fechar
-            graph_window.attributes('-toolwindow', False)
-
-            # Criar o canvas e a barra de rolagem
-            canvas = tk.Canvas(graph_window)
-            scroll_y = tk.Scrollbar(graph_window, orient="vertical", command=canvas.yview)
-            canvas.configure(yscrollcommand=scroll_y.set)
-
-            scroll_frame = tk.Frame(canvas)
-            scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-
-            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-            canvas.pack(side="left", fill="both", expand=True)
-            scroll_y.pack(side="right", fill="y")
-
-            # Adicionar o gráfico ao canvas
-            canvas_graph = FigureCanvasTkAgg(fig, master=scroll_frame)
-            canvas_graph.draw()
-            canvas_graph.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-            # Adicionar a legenda no final da tela
-            legend_frame = tk.Frame(scroll_frame)
-            legend_frame.pack(pady=10)
-            for arquivo, color in color_dict.items():
-                hex_color = self._rgb_to_hex(color)
-                legend_label = tk.Label(legend_frame, text=f"Arquivo: {arquivo}", bg=hex_color, width=50)
-                legend_label.pack(side="top", padx=5, pady=5)
-
-    # Adicionar botões "Aprovado", "Refugado" e "Sair"
-            button_frame = tk.Frame(scroll_frame)
-            button_frame.pack(pady=10)
-
-            def set_status_aprovado():
-                self.db_manager.update_status_amostra(amostra_selecionada, "Aprovado")
-                messagebox.showinfo("Sucesso", "Amostra marcada como Aprovado.")
-                graph_window.destroy()
-
-            def set_status_refugado():
-                self.db_manager.update_status_amostra(amostra_selecionada, "Refugado")
-                messagebox.showinfo("Sucesso", "Amostra marcada como Refugado.")
-                graph_window.destroy()
-
-            tk.Button(button_frame, text="Aprovado", command=set_status_aprovado).pack(side="left", padx=10)
-            tk.Button(button_frame, text="Refugado", command=set_status_refugado).pack(side="left", padx=10)
-            tk.Button(button_frame, text="Sair", command=graph_window.destroy).pack(side="right", padx=10)
-
-        except KeyError as e:
-            messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
-
-
-    def plotar_graficos_arquivo(self, arquivo_selecionado):
-        data = self.db_manager.get_data_for_file(arquivo_selecionado)
-        if not data:
-            messagebox.showinfo("Informação", "Nenhum dado encontrado para o arquivo selecionado.")
-            return
-
-        self.plotar_graficos(data, f"Gráficos do Arquivo {arquivo_selecionado}")
-
-    def plotar_graficos(self, data, title):
-        try:
-            # Obter o nome do arquivo a partir do título
-            arquivo = title.replace("Gráficos do Arquivo ", "").strip()
-
-            # Obter metadados para o arquivo
-            metadados = self.db_manager.get_metadata_for_file(arquivo)
-            if not metadados:
-                messagebox.showerror("Erro", f"Metadados não encontrados para o arquivo: {arquivo}")
-                return
-
-            # Converter a lista de tuplas em um dicionário
-            metadados_dict = {key: value for key, value in metadados}
-
-            cisalhamento_stage = int(metadados_dict.get("Cisalhamento", 8))  # Valor padrão 8 se não encontrado
-
-            # Converter data (lista de dicts) em DataFrame
-            df = pd.DataFrame(data)
-
-            # Converter as colunas necessárias para float
-            numeric_columns = [
-                'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
-                'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B', 'ax_strain',
-                'vol_strain', 'm_A', 'm_B', 'du_kpa_A', 'du_kpa_B', 'stage_no'
-            ]
-            for col in numeric_columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-
-            # Filtrar os dados para o estágio de cisalhamento
-            df_cisalhamento = df[df['stage_no'] == cisalhamento_stage]
-
-            if df_cisalhamento.empty:
-                messagebox.showinfo("Informação", "Nenhum dado encontrado para o estágio de cisalhamento.")
-                return
-
-            # Extrair as colunas para listas
-            void_ratio_A = df_cisalhamento['void_ratio_A'].tolist()
-            void_ratio_B = df_cisalhamento['void_ratio_B'].tolist()
-            eff_camb_A = df_cisalhamento['eff_camb_A'].tolist()
-            eff_camb_B = df_cisalhamento['eff_camb_B'].tolist()
-            dev_stress_A = df_cisalhamento['dev_stress_A'].tolist()
-            dev_stress_B = df_cisalhamento['dev_stress_B'].tolist()
-            nqp_A = df_cisalhamento['nqp_A'].tolist()
-            nqp_B = df_cisalhamento['nqp_B'].tolist()
-            ax_strain = df_cisalhamento['ax_strain'].tolist()
-            vol_strain = df_cisalhamento['vol_strain'].tolist()
-            m_A = df_cisalhamento['m_A'].tolist()
-            m_B = df_cisalhamento['m_B'].tolist()
-            du_kpa_A = df_cisalhamento['du_kpa_A'].tolist()
-            du_kpa_B = df_cisalhamento['du_kpa_B'].tolist()
-
-            # Função auxiliar para remover valores 0 ou NaN antes de plotar
-            def remove_zeros_nan(x, y):
-                filtered_x = []
-                filtered_y = []
-                for i in range(len(x)):
-                    if not np.isnan(x[i]) and not np.isnan(y[i]) and x[i] != 0 and y[i] != 0:
-                        filtered_x.append(x[i])
-                        filtered_y.append(y[i])
-                return filtered_x, filtered_y
-
-            # Criar os gráficos usando os dados filtrados
-            fig, axs = plt.subplots(6, 2, figsize=(14, 32))  # Ajuste o figsize para aumentar o espaçamento entre os gráficos
-
-            # Plot void_ratio_A * eff_camb_A
-            x, y = remove_zeros_nan(eff_camb_A, void_ratio_A)
-            axs[0, 0].scatter(x, y, color='blue')
-            axs[0, 0].set_xlabel('eff_camb_A')
-            axs[0, 0].set_ylabel('void_ratio_A')
-            axs[0, 0].set_title('void_ratio_A * eff_camb_A')
-
-            # Plot void_ratio_B * eff_camb_B
-            x, y = remove_zeros_nan(eff_camb_B, void_ratio_B)
-            axs[0, 1].scatter(x, y, color='blue')
-            axs[0, 1].set_xlabel('eff_camb_B')
-            axs[0, 1].set_ylabel('void_ratio_B')
-            axs[0, 1].set_title('void_ratio_B * eff_camb_B')
-
-            # Plot dev_stress_A * eff_camb_A
-            x, y = remove_zeros_nan(eff_camb_A, dev_stress_A)
-            axs[1, 0].scatter(x, y, color='blue')
-            axs[1, 0].set_xlabel('eff_camb_A')
-            axs[1, 0].set_ylabel('dev_stress_A')
-            axs[1, 0].set_title('dev_stress_A * eff_camb_A')
-
-            # Plot dev_stress_B * eff_camb_B
-            x, y = remove_zeros_nan(eff_camb_B, dev_stress_B)
-            axs[1, 1].scatter(x, y, color='blue')
-            axs[1, 1].set_xlabel('eff_camb_B')
-            axs[1, 1].set_ylabel('dev_stress_B')
-            axs[1, 1].set_title('dev_stress_B * eff_camb_B')
-
-            # Plot nqp_A * ax_strain
-            x, y = remove_zeros_nan(ax_strain, nqp_A)
-            axs[2, 0].scatter(x, y, color='blue')
-            axs[2, 0].set_xlabel('ax_strain')
-            axs[2, 0].set_ylabel('nqp_A')
-            axs[2, 0].set_title('nqp_A * ax_strain')
-
-            # Plot nqp_B * ax_strain
-            x, y = remove_zeros_nan(ax_strain, nqp_B)
-            axs[2, 1].scatter(x, y, color='blue')
-            axs[2, 1].set_xlabel('ax_strain')
-            axs[2, 1].set_ylabel('nqp_B')
-            axs[2, 1].set_title('nqp_B * ax_strain')
-
-            # Plot m_A * ax_strain
-            x, y = remove_zeros_nan(ax_strain, m_A)
-            axs[3, 0].scatter(x, y, color='blue')
-            axs[3, 0].set_xlabel('ax_strain')
-            axs[3, 0].set_ylabel('m_A')
-            axs[3, 0].set_title('m_A * ax_strain')
-
-            # Plot m_B * ax_strain
-            x, y = remove_zeros_nan(ax_strain, m_B)
-            axs[3, 1].scatter(x, y, color='blue')
-            axs[3, 1].set_xlabel('ax_strain')
-            axs[3, 1].set_ylabel('m_B')
-            axs[3, 1].set_title('m_B * ax_strain')
-
-            # vol_strain * ax_strain
-            x, y = remove_zeros_nan(ax_strain, vol_strain)
-            axs[4, 0].scatter(x, y, color='blue')
-            axs[4, 0].set_xlabel('ax_strain')
-            axs[4, 0].set_ylabel('vol_strain')
-            axs[4, 0].set_title('vol_strain * ax_strain')
-
-            # Plot du_kpa_A * ax_strain
-            x, y = remove_zeros_nan(ax_strain, du_kpa_A)
-            axs[4, 1].scatter(x, y, color='blue')
-            axs[4, 1].set_xlabel('ax_strain')
-            axs[4, 1].set_ylabel('du_kpa_A')
-            axs[4, 1].set_title('du_kpa_A * ax_strain')
-
-            # Plot du_kpa_B * ax_strain
-            x, y = remove_zeros_nan(ax_strain, du_kpa_B)
-            axs[5, 0].scatter(x, y, color='blue')
-            axs[5, 0].set_xlabel('ax_strain')
-            axs[5, 0].set_ylabel('du_kpa_B')
-            axs[5, 0].set_title('du_kpa_B * ax_strain')
+                axs[2, 1].set_title('nqp_B x ax_strain')
+                artists.append(sc)
 
             plt.tight_layout()
 
             # Criar a janela de gráficos com barra de rolagem
             graph_window = tk.Toplevel(self.root)
-            graph_window.title(title)
+            graph_window.title(f"Gráficos da Amostra {amostra_selecionada}")
             graph_window.geometry("1280x960")
 
             # Criar o canvas e a barra de rolagem
@@ -930,32 +901,46 @@ class InterfaceApp:
             scroll_y.pack(side="right", fill="y")
 
             # Adicionar o gráfico ao canvas
-            canvas_graph = FigureCanvasTkAgg(fig, master=scroll_frame)
-            canvas_graph.draw()
-            canvas_graph.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            canvas_plot = FigureCanvasTkAgg(fig, master=scroll_frame)
+            canvas_plot.draw()
+            canvas_plot.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-            # Adicionar botões "Aprovado", "Refugado" e "Sair"
+            # Adicionar barra de ferramentas do Matplotlib
+            toolbar = NavigationToolbar2Tk(canvas_plot, scroll_frame)
+            toolbar.update()
+            canvas_plot.get_tk_widget().pack()
+
+            # Adicionar interatividade usando mplcursors
+            cursor = mplcursors.cursor(artists, hover=True)
+
+            @cursor.connect("add")
+            def on_add(sel):
+                sel.annotation.set_text(
+                    f"x: {sel.target[0]:.4f}\ny: {sel.target[1]:.4f}\nArquivo: {sel.artist.get_label()}"
+                )
+
+            @cursor.connect("remove")
+            def on_remove(sel):
+                sel.annotation.set_visible(False)
+                sel.annotation.figure.canvas.draw_idle()
+
+            # Adicionar botões
             button_frame = tk.Frame(scroll_frame)
             button_frame.pack(pady=10)
 
-            def set_status_aprovado():
-                print(f"Atualizando status para 'Aprovado' para o arquivo: {arquivo}")  # Log de depuração
-                self.db_manager.update_status_individual(arquivo, "Aprovado")
-                graph_window.destroy()
+            # Botão de Filtrar Arquivos
+            tk.Button(button_frame, text="Filtrar Arquivos", command=lambda: self.filtrar_arquivos(graph_window, amostra_selecionada), width=20).pack(side="left", padx=10)
 
-            def set_status_refugado():
-                print(f"Atualizando status para 'Refugado' para o arquivo: {arquivo}")  # Log de depuração
-                self.db_manager.update_status_individual(arquivo, "Refugado")
-                graph_window.destroy()
-
-            tk.Button(button_frame, text="Aprovado", command=set_status_aprovado).pack(side="left", padx=10)
-            tk.Button(button_frame, text="Refugado", command=set_status_refugado).pack(side="left", padx=10)
-            tk.Button(button_frame, text="Sair", command=graph_window.destroy).pack(side="right", padx=10)
+            # Botão "Sair"
+            tk.Button(button_frame, text="Sair", command=graph_window.destroy, width=20).pack(side="right", padx=10)
 
         except KeyError as e:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
+
+
+
     def gerar_planilha_cliente_screen(self):
         self.clear_screen()
         self.root.title("Gerar Planilha Cliente")
