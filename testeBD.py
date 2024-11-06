@@ -321,9 +321,19 @@ def process_file_for_db(df, nome_completo, metadados):
 
     base_nome = os.path.basename(nome_completo)
     nome_partes = os.path.splitext(base_nome)[0].split('_')
-    amostra = nome_partes[0]
-    tipo = '_'.join(nome_partes[1:-1]) if len(nome_partes) > 2 else 'Desconhecido'
-    ensaio = nome_partes[-1] if len(nome_partes) > 1 else 'Desconhecido'
+
+    if len(nome_partes) >= 4:
+        tipo = '_'.join(nome_partes[0:2])  # Junta os dois primeiros elementos
+        amostra = nome_partes[2]           # Terceiro elemento
+        ensaio = nome_partes[3]            # Quarto elemento
+    elif len(nome_partes) == 3:
+        tipo = nome_partes[0]              # Primeiro elemento
+        amostra = nome_partes[1]           # Segundo elemento
+        ensaio = nome_partes[2]            # Terceiro elemento
+    else:
+        tipo = 'Desconhecido'
+        amostra = 'Desconhecida'
+        ensaio = 'Desconhecido'
 
     id_tipo = db_manager.insert_tipo_ensaio(tipo)
     id_amostra = db_manager.insert_amostra(amostra)

@@ -392,17 +392,20 @@ class InterfaceApp:
     def save_to_database(self):
         cursor = self.db_manager.conn.cursor()
 
-        # Extrair 'Amostra', 'TipoEnsaio' e 'Ensaio' do nome do arquivo
         base_nome = os.path.basename(self.selected_file)
         nome_partes = os.path.splitext(base_nome)[0].split('_')
 
-        if len(nome_partes) >= 3:
-            amostra = nome_partes[0]
-            tipo_ensaio = '_'.join(nome_partes[1:-1])
-            ensaio = nome_partes[-1]
+        if len(nome_partes) >= 4:
+            tipo_ensaio = '_'.join(nome_partes[0:2])  # Junta os dois primeiros elementos
+            amostra = nome_partes[2]                  # Terceiro elemento
+            ensaio = nome_partes[3]                   # Quarto elemento
+        elif len(nome_partes) == 3:
+            tipo_ensaio = nome_partes[0]              # Primeiro elemento
+            amostra = nome_partes[1]                  # Segundo elemento
+            ensaio = nome_partes[2]                   # Terceiro elemento
         else:
-            amostra = 'Desconhecida'
             tipo_ensaio = 'Desconhecido'
+            amostra = 'Desconhecida'
             ensaio = 'Desconhecido'
 
         # Verificar se o NomeCompleto já existe na tabela Ensaio
