@@ -837,22 +837,30 @@ class InterfaceApp:
 
     def plotar_graficos_arquivo(self, arquivo_selecionado):
         try:
+            # Obter os dados do arquivo selecionado
             data = self.db_manager.get_data_for_file(arquivo_selecionado)
             if not data:
                 messagebox.showinfo("Informação", "Nenhum dado encontrado para o arquivo selecionado.")
                 return
 
+            # Obter metadados para o arquivo
             metadados = self.db_manager.get_metadata_for_file(arquivo_selecionado)
             if not metadados:
                 messagebox.showinfo("Informação", "Nenhum metadado encontrado para o arquivo selecionado.")
                 return
 
+            # Converter a lista de tuplas em um dicionário
             metadados_dict = {key: value for key, value in metadados}
 
+            # Obter os valores dos estágios dinamicamente dos metadados
             cisalhamento_stage = int(metadados_dict.get("Cisalhamento", 8))
+            adensamento_stage = int(metadados_dict.get("Adensamento", 7))
+            b_stage = int(metadados_dict.get("B", 5))
 
+            # Converter a lista de dicts para DataFrame
             df = pd.DataFrame(data)
 
+            # Converter as colunas necessárias para float
             numeric_columns = [
                 'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
                 'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B', 'ax_strain',
@@ -861,6 +869,7 @@ class InterfaceApp:
             for col in numeric_columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
+            # Filtrar os dados para o estágio de cisalhamento
             df_cisalhamento = df[df['stage_no'] == cisalhamento_stage]
 
             if df_cisalhamento.empty:
@@ -967,6 +976,7 @@ class InterfaceApp:
 
 
 
+
     def verificar_arquivo_individual(self):
         selection = self.ensaio_listbox.curselection()
         if selection:
@@ -1031,7 +1041,10 @@ class InterfaceApp:
 
                 metadados_dict = {key: value for key, value in metadados}
 
+                # Obter os valores dos estágios dinamicamente dos metadados
                 cisalhamento_stage = int(metadados_dict.get("Cisalhamento", 8))
+                adensamento_stage = int(metadados_dict.get("Adensamento", 7))
+                b_stage = int(metadados_dict.get("B", 5))
 
                 df = pd.DataFrame(rows)
 
@@ -1064,15 +1077,15 @@ class InterfaceApp:
             artists = []
 
             plots = [
-                ('void_ratio_A', 'eff_camb_A', (0, 1), (0, 10000)),
-                ('void_ratio_B', 'eff_camb_B', (0, 1), (0, 10000)),
-                ('dev_stress_A', 'eff_camb_A', (0, 3000), (0, 3000)),
-                ('dev_stress_B', 'eff_camb_B', (0, 3000), (0, 3000)),
-                ('nqp_A', 'ax_strain', (0, 2.5), (0, 45)),
-                ('nqp_B', 'ax_strain', (0, 2.5), (0, 45)),
+                ('void_ratio_A', 'eff_camb_A'),
+                ('void_ratio_B', 'eff_camb_B'),
+                ('dev_stress_A', 'eff_camb_A'),
+                ('dev_stress_B', 'eff_camb_B'),
+                ('nqp_A', 'ax_strain'),
+                ('nqp_B', 'ax_strain'),
             ]
 
-            for idx, (y_col, x_col, y_lim, x_lim) in enumerate(plots):
+            for idx, (y_col, x_col) in enumerate(plots):
                 ax = axs[idx]
                 for file_idx, (arquivo, df_cisalhamento) in enumerate(datasets.items()):
                     sc = ax.scatter(df_cisalhamento[x_col], df_cisalhamento[y_col], picker=True)
@@ -1082,8 +1095,6 @@ class InterfaceApp:
                 ax.set_xlabel(x_col)
                 ax.set_ylabel(y_col)
                 ax.set_title(f'{y_col} x {x_col}')
-                ax.set_ylim(y_lim)
-                ax.set_xlim(x_lim)
 
             for idx in range(len(plots), len(axs)):
                 fig.delaxes(axs[idx])
