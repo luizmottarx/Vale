@@ -1,4 +1,4 @@
-#interface.py
+# interface.py
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 import tkinter as tk
@@ -864,7 +864,7 @@ class InterfaceApp:
             numeric_columns = [
                 'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
                 'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B', 'ax_strain',
-                'vol_strain', 'du_kpa_A', 'du_kpa_B', 'm_A', 'm_B', 'stage_no'
+                'vol_strain', 'du_kpa', 'm_A', 'm_B', 'stage_no'
             ]
             for col in numeric_columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -881,8 +881,7 @@ class InterfaceApp:
                 ('dev_stress_B', 'ax_strain'),
                 ('dev_stress_A', 'eff_camb_A'),
                 ('dev_stress_B', 'eff_camb_B'),
-                ('du_kpa_A', 'ax_strain'),
-                ('du_kpa_B', 'ax_strain'),
+                ('du_kpa', 'ax_strain'),
                 ('vol_strain', 'ax_strain'),
                 ('void_ratio_A', 'eff_camb_A'),
                 ('void_ratio_B', 'eff_camb_B'),
@@ -1051,7 +1050,7 @@ class InterfaceApp:
                 numeric_columns = [
                     'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
                     'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B', 'ax_strain',
-                    'vol_strain', 'du_kpa_A', 'du_kpa_B', 'm_A', 'm_B', 'stage_no'
+                    'vol_strain', 'du_kpa', 'm_A', 'm_B', 'stage_no'
                 ]
                 for col in numeric_columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')

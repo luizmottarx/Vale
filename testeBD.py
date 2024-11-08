@@ -205,7 +205,7 @@ class DatabaseManager:
                 'void_ratio_A', 'eff_ax_stress_A', 'eff_ax_stress_B', 'eff_stress_rat_A',
                 'eff_stress_rat_B', 'eff_camb_A', 'eff_camb_B',
                 'camb_p_A', 'camb_p_B', 'max_shear_stress_A',
-                'max_shear_stress_B', 'excessPWP', 'du_kpa_A', 'du_kpa_B', 'nqp_A', 'nqp_B',
+                'max_shear_stress_B', 'excessPWP', 'du_kpa', 'nqp_A', 'nqp_B',
                 'm_A', 'm_B', 'shear_strain', 'diameter_A', 'diameter_B',
                 'b_val', 'avg_eff_stress_A', 'avg_eff_stress_B', 'avg_mean_stress',
                 'rad_strain_A', 'rad_strain_B'
@@ -361,7 +361,7 @@ def process_file_for_db(df, nome_completo, metadados):
             'void_ratio_A', 'eff_ax_stress_A', 'eff_ax_stress_B', 'eff_stress_rat_A',
             'eff_stress_rat_B', 'eff_camb_A', 'eff_camb_B',
             'camb_p_A', 'camb_p_B', 'max_shear_stress_A',
-            'max_shear_stress_B', 'excessPWP', 'du_kpa_A', 'du_kpa_B', 'nqp_A', 'nqp_B',
+            'max_shear_stress_B', 'excessPWP', 'du_kpa', 'nqp_A', 'nqp_B',
             'm_A', 'm_B', 'shear_strain', 'diameter_A', 'diameter_B',
             'b_val', 'avg_eff_stress_A', 'avg_eff_stress_B', 'avg_mean_stress',
             'rad_strain_A', 'rad_strain_B'
