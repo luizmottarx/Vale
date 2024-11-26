@@ -70,3 +70,10 @@ corrrigir metodo A
 correção do método A feito
 automação de preenchimento da planilha excel, como preencher arquivo modelo TIR e TER, transformar arquivo mais leve.
 
+
+26/11
+correção no PreencherExcel.py
+adicionar no interface.py
+permitir que o usuário seleciona Método A ou Método B
+em seguida, selecionar quais arquivos individuais encontrados, ele quer preencher a planilha final, depois de selecionar TER OU TIR, depois Metodo A ou Metodo B, depois selecionar até 5 arquivos arquivos individuais e gerar planilha final
+rastreie no codigo da interface.py a função de gerar planilha final e adicione esses caminhos em seguida de TER/TIR
