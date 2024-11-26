@@ -1,3 +1,5 @@
+# PreencherExcel.py
+
 import sqlite3
 import os
 from openpyxl import load_workbook
@@ -10,7 +12,7 @@ def safe_float_conversion(value):
     except (ValueError, TypeError):
         return 0.0
 
-def gerar_planilha_para_amostra(amostra_selecionada, tipo_ensaio_selecionado):
+def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado, metodo):
     # Determinar o modelo de planilha com base no TipoEnsaio
     if tipo_ensaio_selecionado.startswith('TIR'):
         modelo_planilha = r'C:\Users\lgv_v\Documents\LUIZ\Modelo Planilha Final\ModeloPlanilhaFinal_TIR.xlsx'
@@ -27,7 +29,7 @@ def gerar_planilha_para_amostra(amostra_selecionada, tipo_ensaio_selecionado):
     # Copiar o modelo para criar a nova planilha
     novo_arquivo = os.path.join(
         r'C:\Users\lgv_v\Documents\LUIZ\Modelo Planilha Final',
-        f'Planilha_Preenchida_{amostra_selecionada}_{tipo_ensaio_selecionado}.xlsx'
+        f'Planilha_Preenchida_{tipo_ensaio_selecionado}_{metodo}.xlsx'
     )
     shutil.copy(modelo_planilha, novo_arquivo)
 
@@ -38,28 +40,17 @@ def gerar_planilha_para_amostra(amostra_selecionada, tipo_ensaio_selecionado):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Obter os arquivos que correspondem à Amostra e TipoEnsaio selecionados
-    cursor.execute("""
-        SELECT e.NomeCompleto
-        FROM Ensaio e
-        JOIN Amostra a ON e.id_amostra = a.id_amostra
-        JOIN TipoEnsaio te ON e.id_tipo = te.id_tipo
-        WHERE a.amostra = ? AND te.tipo = ?
-        ORDER BY e.NomeCompleto
-    """, (amostra_selecionada, tipo_ensaio_selecionado))
-    arquivos = [row[0] for row in cursor.fetchall()]
-
-    if not arquivos:
-        print(f"Nenhum arquivo encontrado para a amostra '{amostra_selecionada}' e TipoEnsaio '{tipo_ensaio_selecionado}'.")
+    if not arquivos_selecionados:
+        print("Nenhum arquivo selecionado para gerar a planilha.")
         conn.close()
         return
 
     # Dicionário para mapear índices a letras (A, B, C, D, E)
     letras = ['A', 'B', 'C', 'D', 'E']
 
-    for idx, arquivo in enumerate(arquivos):
+    for idx, arquivo in enumerate(arquivos_selecionados):
         if idx >= len(letras):
-            print(f"Mais de {len(letras)} arquivos encontrados. Apenas os primeiros {len(letras)} serão processados.")
+            print(f"Mais de {len(letras)} arquivos selecionados. Apenas os primeiros {len(letras)} serão processados.")
             break
 
         # Nome da folha correspondente
@@ -89,6 +80,18 @@ def gerar_planilha_para_amostra(amostra_selecionada, tipo_ensaio_selecionado):
         """, (arquivo,))
         metadados = dict(cursor.fetchall())
 
+        # Obter os estágios dos metadados
+        try:
+            B_stage = int(metadados['B'])
+            Adensamento_stage = int(metadados['Adensamento'])
+            Cisalhamento_stage = int(metadados['Cisalhamento'])
+        except KeyError as e:
+            print(f"Estágio '{e.args[0]}' não encontrado nos metadados do arquivo {arquivo}.")
+            continue
+        except ValueError:
+            print(f"Valores inválidos para os estágios nos metadados do arquivo {arquivo}.")
+            continue
+
         # Recuperar dados de EnsaiosTriaxiais
         cursor.execute("""
             SELECT *
@@ -105,10 +108,6 @@ def gerar_planilha_para_amostra(amostra_selecionada, tipo_ensaio_selecionado):
         for row in ensaio_data:
             for col, value in zip(colunas, row):
                 data_dict[col].append(safe_float_conversion(value))
-
-        B_stage = int(metadados.get('B', 5))
-        Adensamento_stage = int(metadados.get('Adensamento', 7))
-        Cisalhamento_stage = int(metadados.get('Cisalhamento', 8))
 
         def get_stage_data(stage_number):
             indices = [i for i, val in enumerate(data_dict['stage_no']) if val == stage_number]
@@ -135,24 +134,39 @@ def gerar_planilha_para_amostra(amostra_selecionada, tipo_ensaio_selecionado):
             sheet.cell(row=10 + i, column=5, value=B_data.get('pore_press_Original', [])[i])  # E10 em diante
 
         # Preencher dados do estágio de Adensamento
+        # Preencher células AL7 a AU7 (colunas 38 a 47) com dados do estágio de adensamento
         ad_rows = len(adensamento_data.get('stage_no', []))
-        ad_columns = ['stage_no', 'time_test_start', 'time_stage_start', 'rad_press_Original', 'rad_vol_Original',
-                      'back_press_Original', 'back_vol', 'load_cell_Original', 'pore_press_Original', 'ax_disp']
+        ad_columns = [
+            'stage_no', 'time_test_start', 'time_stage_start', 'rad_press_Original', 'rad_vol_Original',
+            'back_press_Original', 'back_vol_Original', 'load_cell_Original', 'pore_press_Original', 'ax_disp_Original'
+        ]
         ad_column_indices = [38, 39, 40, 41, 42, 43, 44, 45, 46, 47]  # Colunas AL(38) a AU(47)
 
-        for idx_col, col_name in enumerate(ad_columns):
-            data = adensamento_data.get(col_name, [])
-            for i, value in enumerate(data):
-                sheet.cell(row=7 + i, column=ad_column_indices[idx_col], value=value)
+        for idx_row in range(ad_rows):
+            for idx_col, col_name in enumerate(ad_columns):
+                value = adensamento_data.get(col_name, [])[idx_row]
+                sheet.cell(row=7 + idx_row, column=ad_column_indices[idx_col], value=value)
 
         # Preencher dados do estágio de Cisalhamento
         cis_rows = len(cisalhamento_data.get('stage_no', []))
+
         # Calcula pore_press_0 como o primeiro valor de pore_press_Original no estágio de cisalhamento
         pore_press_0 = cisalhamento_data.get('pore_press_Original', [0])[0]
 
-        # Calcular eff_ax_stress e eff_rad_press
+        # Redução de dados para o estágio de Cisalhamento
+        cis_data_length = cis_rows
+
+        # Obter os dados do estágio de cisalhamento
+        cis_columns = [
+            'time_test_start', 'rad_press_Original', 'back_press_Original', 'pore_press_Original',
+            'cur_area_A' if metodo == 'A' else 'cur_area_Original', 'ax_disp_Original', 'load_cell_Original',
+            'ax_strain_Original', 'dev_stress_Original'
+        ]
+
+        # Calcula eff_ax_stress e eff_rad_press
         eff_ax_stress = []
         eff_rad_press = []
+
         for i in range(cis_rows):
             load_cell = cisalhamento_data.get('load_cell_Original', [])[i]
             rad_press = cisalhamento_data.get('rad_press_Original', [])[i]
@@ -162,41 +176,66 @@ def gerar_planilha_para_amostra(amostra_selecionada, tipo_ensaio_selecionado):
             eff_ax_stress.append(eff_ax)
             eff_rad_press.append(eff_rad)
 
-        # Prepara os dados para preenchimento
-        cis_columns = [
-            ('stage_no', cisalhamento_data.get('stage_no', [])),  # R
-            ('stage_no_time', [val / 60 for val in cisalhamento_data.get('stage_no', [])]),  # S
-            ('rad_press_Original', cisalhamento_data.get('rad_press_Original', [])),  # T
-            ('back_press_Original', cisalhamento_data.get('back_press_Original', [])),  # U
-            ('pore_press_Original', cisalhamento_data.get('pore_press_Original', [])),  # V
-            ('vol_B', cisalhamento_data.get('vol_B', [])),  # W (Assuming 'vol_B' exists)
-            ('ax_disp', cisalhamento_data.get('ax_disp', [])),  # X
-            ('load_cell_Original', cisalhamento_data.get('load_cell_Original', [])),  # Y
-            ('ax_strain', cisalhamento_data.get('ax_strain', [])),  # Z
-            ('dev_stress', cisalhamento_data.get('dev_stress_A', [])),  # AA
-            ('eff_ax_stress_div_eff_rad_press', [ea / er if er != 0 else None for ea, er in zip(eff_ax_stress, eff_rad_press)]),  # AB
-            ('pore_press_diff', [pore_press_0 - pp for pp in cisalhamento_data.get('pore_press_Original', [])]),  # AC
-            ('eff_stress_avg', [(ea + er) / 2 for ea, er in zip(eff_ax_stress, eff_rad_press)]),  # AD
-            ('eff_stress_diff', [(ea - er) / 2 for ea, er in zip(eff_ax_stress, eff_rad_press)]),  # AE
+        # Cálculos adicionais
+        time_test_start = cisalhamento_data.get('time_test_start', [])
+        time_test_start_div_60 = [t / 60 for t in time_test_start]
+        eff_ax_stress_div_eff_rad_press = [ea / er if er != 0 else None for ea, er in zip(eff_ax_stress, eff_rad_press)]
+        pore_press_diff = [pore_press_0 - pp for pp in cisalhamento_data.get('pore_press_Original', [])]
+        eff_stress_avg = [(ea + er) / 2 for ea, er in zip(eff_ax_stress, eff_rad_press)]
+        eff_stress_diff = [(ea - er) / 2 for ea, er in zip(eff_ax_stress, eff_rad_press)]
+
+        # Prepare data for filling
+        cis_data = {
+            'time_test_start': time_test_start,
+            'time_test_start_div_60': time_test_start_div_60,
+            'rad_press_Original': cisalhamento_data.get('rad_press_Original', []),
+            'back_press_Original': cisalhamento_data.get('back_press_Original', []),
+            'pore_press_Original': cisalhamento_data.get('pore_press_Original', []),
+            'cur_area': cisalhamento_data.get('cur_area_A' if metodo == 'A' else 'cur_area_Original', []),
+            'ax_disp_Original': cisalhamento_data.get('ax_disp_Original', []),
+            'load_cell_Original': cisalhamento_data.get('load_cell_Original', []),
+            'ax_strain_Original': cisalhamento_data.get('ax_strain_Original', []),
+            'dev_stress_Original': cisalhamento_data.get('dev_stress_Original', []),
+            'eff_ax_stress_div_eff_rad_press': eff_ax_stress_div_eff_rad_press,
+            'pore_press_diff': pore_press_diff,
+            'eff_stress_avg': eff_stress_avg,
+            'eff_stress_diff': eff_stress_diff
+        }
+
+        # Redução dos dados conforme especificado
+        # Obter as primeiras 30 linhas
+        first_30_indices = list(range(min(30, cis_data_length)))
+        # Restante dos dados
+        remaining_indices = list(range(30, cis_data_length))
+
+        # Dividir o restante dos dados em 10 partes e selecionar a primeira linha de cada parte
+        num_parts = 10
+        if remaining_indices:
+            indices_per_part = max(len(remaining_indices) // num_parts, 1)
+            sampled_indices = [remaining_indices[i * indices_per_part] for i in range(num_parts) if i * indices_per_part < len(remaining_indices)]
+        else:
+            sampled_indices = []
+
+        # Combinar os índices
+        cis_indices = first_30_indices + sampled_indices
+
+        # Ordenar os índices
+        cis_indices.sort()
+
+        # Colunas a serem preenchidas e seus índices de coluna no Excel
+        cis_column_names = [
+            'time_test_start', 'time_test_start_div_60', 'rad_press_Original', 'back_press_Original',
+            'pore_press_Original', 'cur_area', 'ax_disp_Original', 'load_cell_Original', 'ax_strain_Original',
+            'dev_stress_Original', 'eff_ax_stress_div_eff_rad_press', 'pore_press_diff', 'eff_stress_avg',
+            'eff_stress_diff'
         ]
         cis_column_indices = [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]  # R(18) a AE(31)
 
-        # Redução de dados para o estágio de Cisalhamento
-        cis_data_length = cis_rows
-        cis_indices = []
-        if cis_data_length > 30:
-            # Manter as primeiras 30 linhas
-            cis_indices.extend(range(30))
-            # Amostrar o restante dos dados a cada 10 linhas
-            cis_indices.extend(range(30, cis_data_length, 10))
-        else:
-            cis_indices = list(range(cis_data_length))
-
         # Preencher os dados nas células especificadas
-        for idx_col, (col_name, data) in enumerate(cis_columns):
-            data_reduced = [data[i] for i in cis_indices]
-            for i, value in enumerate(data_reduced):
-                sheet.cell(row=7 + i, column=cis_column_indices[idx_col], value=value)
+        for idx_row, data_idx in enumerate(cis_indices):
+            for idx_col, col_name in enumerate(cis_column_names):
+                value = cis_data[col_name][data_idx]
+                sheet.cell(row=7 + idx_row, column=cis_column_indices[idx_col], value=value)
 
     # Salvar e fechar o workbook
     wb.save(novo_arquivo)
