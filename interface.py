@@ -112,23 +112,26 @@ class DatabaseManager:
         cursor = self.conn.execute("SELECT amostra FROM Amostra")
         return [row[0] for row in cursor.fetchall()]
 
-    def get_ensaios_by_amostra(self, amostra, status_individual=None, exclude_status=None):
+    def get_ensaios_by_amostra(self, amostra, status_individual=None, exclude_status=None, tipo_ensaio=None):
         cursor = self.conn.execute("SELECT id_amostra FROM Amostra WHERE amostra = ?", (amostra,))
         row = cursor.fetchone()
         if row:
             id_amostra = row[0]
-            if status_individual:
-                cursor = self.conn.execute(
-                    "SELECT NomeCompleto FROM Ensaio WHERE id_amostra = ? AND statusIndividual = ?",
-                    (id_amostra, status_individual)
-                )
-            elif exclude_status:
-                cursor = self.conn.execute(
-                    "SELECT NomeCompleto FROM Ensaio WHERE id_amostra = ? AND statusIndividual != ?",
-                    (id_amostra, exclude_status)
-                )
+            query = "SELECT e.NomeCompleto FROM Ensaio e"
+            params = []
+            if tipo_ensaio:
+                query += " JOIN TipoEnsaio te ON e.id_tipo = te.id_tipo WHERE e.id_amostra = ? AND te.tipo = ?"
+                params.extend([id_amostra, tipo_ensaio])
             else:
-                cursor = self.conn.execute("SELECT NomeCompleto FROM Ensaio WHERE id_amostra = ?", (id_amostra,))
+                query += " WHERE e.id_amostra = ?"
+                params.append(id_amostra)
+            if status_individual:
+                query += " AND e.statusIndividual = ?"
+                params.append(status_individual)
+            elif exclude_status:
+                query += " AND e.statusIndividual != ?"
+                params.append(exclude_status)
+            cursor = self.conn.execute(query, params)
             return [row[0] for row in cursor.fetchall()]
         else:
             return []
@@ -706,10 +709,11 @@ class InterfaceApp:
         selection = self.amostra_listbox.curselection()
         if selection:
             index = selection[0]
-            amostra_selecionada = self.amostra_listbox.get(index)
-            self.mostrar_ensaios_amostra(amostra_selecionada)
+            self.amostra_selecionada = self.amostra_listbox.get(index)
+            self.selecionar_tipo_ensaio_screen()
         else:
             messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
+            return
 
 
     def mostrar_ensaios_amostra(self, amostra_selecionada):
@@ -1174,51 +1178,174 @@ class InterfaceApp:
             self.amostra_listbox.insert(tk.END, amostra)
         self.amostra_listbox.pack()
 
-        tk.Button(frame, text="Avançar", command=self.selecionar_tipo_ensaio, width=15).pack(pady=10)
+        tk.Button(frame, text="Avançar", command=self.avancar_amostra, width=15).pack(pady=10)
 
         tk.Button(frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).pack(pady=10)
 
+
     def selecionar_tipo_ensaio(self):
+        # Sempre obter a seleção atual da listbox
         selection = self.amostra_listbox.curselection()
         if selection:
             index = selection[0]
             self.amostra_selecionada = self.amostra_listbox.get(index)
-            tipos_ensaio = self.db_manager.get_tipo_ensaio_by_amostra(self.amostra_selecionada)
-            if not tipos_ensaio:
-                messagebox.showinfo("Informação", "Nenhum TipoEnsaio encontrado para a amostra selecionada.")
-                return
-
-            self.clear_screen()
-            self.root.title("Selecionar TipoEnsaio")
-
-            frame = tk.Frame(self.root)
-            frame.pack(pady=20)
-
-            tk.Label(frame, text="Selecione o TipoEnsaio para gerar a planilha:").pack(pady=10)
-            self.tipo_ensaio_listbox = tk.Listbox(frame, width=80, height=10)
-            for tipo in tipos_ensaio:
-                self.tipo_ensaio_listbox.insert(tk.END, tipo)
-            self.tipo_ensaio_listbox.pack()
-
-            tk.Button(frame, text="Gerar Planilha", command=self.gerar_planilha_selecionada, width=15).pack(pady=10)
-
-            tk.Button(frame, text="Voltar", command=self.gerar_planilha_cliente_screen, width=15).pack(pady=10)
         else:
             messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
+            return
 
-    def gerar_planilha_selecionada(self):
+        tipos_ensaio = self.db_manager.get_tipo_ensaio_by_amostra(self.amostra_selecionada)
+        if not tipos_ensaio:
+            messagebox.showinfo("Informação", "Nenhum TipoEnsaio encontrado para a amostra selecionada.")
+            return
+
+        self.clear_screen()
+        self.root.title("Selecionar TipoEnsaio")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text="Selecione o TipoEnsaio para gerar a planilha:").pack(pady=10)
+        self.tipo_ensaio_listbox = tk.Listbox(frame, width=80, height=10)
+        for tipo in tipos_ensaio:
+            self.tipo_ensaio_listbox.insert(tk.END, tipo)
+        self.tipo_ensaio_listbox.pack()
+
+        tk.Button(frame, text="Avançar", command=self.selecionar_metodo, width=15).pack(pady=10)
+        tk.Button(frame, text="Voltar", command=self.gerar_planilha_cliente_screen, width=15).pack(pady=10)
+
+
+    def selecionar_metodo(self):
+        # Sempre obter a seleção atual da listbox
         selection = self.tipo_ensaio_listbox.curselection()
         if selection:
             index = selection[0]
-            tipo_ensaio_selecionado = self.tipo_ensaio_listbox.get(index)
-            try:
-                from PreencherExcel import gerar_planilha_para_amostra
-                gerar_planilha_para_amostra(self.amostra_selecionada, tipo_ensaio_selecionado)
-                messagebox.showinfo("Sucesso", f"Planilha gerada com sucesso para a amostra '{self.amostra_selecionada}' e TipoEnsaio '{tipo_ensaio_selecionado}'.")
-            except Exception as e:
-                messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
+            self.tipo_ensaio_selecionado = self.tipo_ensaio_listbox.get(index)
         else:
             messagebox.showerror("Erro", "Nenhum TipoEnsaio selecionado!")
+            return
+
+        self.clear_screen()
+        self.root.title("Selecionar Método")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text="Selecione o Método:").pack(pady=10)
+        self.metodo_var = tk.StringVar(value='A')  # Valor padrão
+        metodo_frame = tk.Frame(frame)
+        metodo_frame.pack(pady=5)
+        tk.Radiobutton(metodo_frame, text="Método A", variable=self.metodo_var, value='A').pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(metodo_frame, text="Método B", variable=self.metodo_var, value='B').pack(side=tk.LEFT, padx=5)
+
+        tk.Button(frame, text="Avançar", command=self.selecionar_arquivos, width=15).pack(pady=10)
+        tk.Button(frame, text="Voltar", command=self.selecionar_tipo_ensaio, width=15).pack(pady=10)
+
+    def avancar_metodo(self):
+        metodo_selecionado = self.metodo_var.get()
+        if not metodo_selecionado:
+            messagebox.showerror("Erro", "Nenhum Método selecionado!")
+            return
+        self.metodo_selecionado = metodo_selecionado
+        self.selecionar_arquivos()
+
+    def selecionar_metodo_screen(self):
+        self.clear_screen()
+        self.root.title("Selecionar Método")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text="Selecione o Método:").pack(pady=10)
+        self.metodo_var = tk.StringVar(value='A')  # Valor padrão
+        metodo_frame = tk.Frame(frame)
+        metodo_frame.pack(pady=5)
+        tk.Radiobutton(metodo_frame, text="Método A", variable=self.metodo_var, value='A').pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(metodo_frame, text="Método B", variable=self.metodo_var, value='B').pack(side=tk.LEFT, padx=5)
+
+        tk.Button(frame, text="Avançar", command=self.avancar_metodo, width=15).pack(pady=10)
+        tk.Button(frame, text="Voltar", command=self.selecionar_tipo_ensaio_screen, width=15).pack(pady=10)
+
+    def avancar_tipo_ensaio(self):
+        selection = self.tipo_ensaio_listbox.curselection()
+        if selection:
+            index = selection[0]
+            self.tipo_ensaio_selecionado = self.tipo_ensaio_listbox.get(index)
+            self.selecionar_metodo_screen()
+        else:
+            messagebox.showerror("Erro", "Nenhum TipoEnsaio selecionado!")
+            return
+
+    def selecionar_tipo_ensaio_screen(self):
+        tipos_ensaio = self.db_manager.get_tipo_ensaio_by_amostra(self.amostra_selecionada)
+        if not tipos_ensaio:
+            messagebox.showinfo("Informação", "Nenhum TipoEnsaio encontrado para a amostra selecionada.")
+            return
+
+        self.clear_screen()
+        self.root.title("Selecionar TipoEnsaio")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text="Selecione o TipoEnsaio para gerar a planilha:").pack(pady=10)
+        self.tipo_ensaio_listbox = tk.Listbox(frame, width=80, height=10)
+        for tipo in tipos_ensaio:
+            self.tipo_ensaio_listbox.insert(tk.END, tipo)
+        self.tipo_ensaio_listbox.pack()
+
+        tk.Button(frame, text="Avançar", command=self.avancar_tipo_ensaio, width=15).pack(pady=10)
+        tk.Button(frame, text="Voltar", command=self.gerar_planilha_cliente_screen, width=15).pack(pady=10)
+
+    def selecionar_arquivos(self):
+        self.clear_screen()
+        self.root.title(f"Selecionar Arquivos da Amostra {self.amostra_selecionada}")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text=f"Selecione até 5 arquivos individuais aprovados da amostra {self.amostra_selecionada} e TipoEnsaio '{self.tipo_ensaio_selecionado}':").pack(pady=10)
+        self.arquivos_listbox = tk.Listbox(frame, selectmode=tk.MULTIPLE, width=80, height=10)
+        self.arquivos_listbox.pack()
+
+        # Obter arquivos aprovados da amostra selecionada e do TipoEnsaio selecionado
+        arquivos_aprovados = self.db_manager.get_ensaios_by_amostra(
+            self.amostra_selecionada,
+            status_individual='Aprovado',
+            tipo_ensaio=self.tipo_ensaio_selecionado
+        )
+        if not arquivos_aprovados:
+            messagebox.showinfo("Informação", f"Nenhum arquivo aprovado encontrado para a amostra '{self.amostra_selecionada}' e TipoEnsaio '{self.tipo_ensaio_selecionado}'.")
+            self.selecionar_metodo_screen()
+            return
+
+        for arquivo in arquivos_aprovados:
+            self.arquivos_listbox.insert(tk.END, arquivo)
+
+        tk.Button(frame, text="Gerar Planilha", command=self.gerar_planilha_selecionada, width=15).pack(pady=10)
+        tk.Button(frame, text="Voltar", command=self.selecionar_metodo_screen, width=15).pack(pady=10)
+
+
+    def gerar_planilha_selecionada(self):
+        arquivos_selecionados_indices = self.arquivos_listbox.curselection()
+        if not arquivos_selecionados_indices:
+            messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
+            return
+        if len(arquivos_selecionados_indices) > 5:
+            messagebox.showerror("Erro", "Selecione no máximo 5 arquivos!")
+            return
+        self.arquivos_selecionados = [self.arquivos_listbox.get(i) for i in arquivos_selecionados_indices]
+
+        try:
+            from PreencherExcel import gerar_planilha_para_arquivos
+            gerar_planilha_para_arquivos(
+                self.arquivos_selecionados,
+                self.tipo_ensaio_selecionado,
+                self.metodo_selecionado
+            )
+            messagebox.showinfo("Sucesso", f"Planilha gerada com sucesso com os arquivos selecionados.")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
+
 
        
     # Gerenciamento de Usuários
