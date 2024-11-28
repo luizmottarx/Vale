@@ -644,7 +644,7 @@ class InterfaceApp:
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
-        tk.Button(button_frame, text="Ver gráficos da amostra", command=self.avancar_amostra, width=25).grid(row=0, column=0, padx=10)
+        tk.Button(button_frame, text="Ver gráficos da amostra",  command=self.avancar_amostra, width=25).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Selecionar Individual", command=self.selecionar_individual_amostra, width=25).grid(row=0, column=1, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=25).grid(row=0, column=2, padx=10)
 
@@ -709,8 +709,9 @@ class InterfaceApp:
         selection = self.amostra_listbox.curselection()
         if selection:
             index = selection[0]
-            self.amostra_selecionada = self.amostra_listbox.get(index)
-            self.selecionar_tipo_ensaio_screen()
+            amostra_selecionada = self.amostra_listbox.get(index)
+            self.amostra_selecionada = amostra_selecionada
+            self.selecionar_arquivos_amostra(amostra_selecionada)
         else:
             messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
             return
@@ -767,6 +768,7 @@ class InterfaceApp:
 
         tk.Button(button_frame, text="Plotar Gráficos", command=lambda: self.plotar_graficos_amostra(amostra_selecionada), width=20).grid(row=0, column=0, padx=5)
         tk.Button(button_frame, text="Voltar", command=self.verificar_ensaio_screen, width=20).grid(row=0, column=1, padx=5)
+
 
     def configurar_escalas(self, fig, axs):
         config_window = tk.Toplevel(self.root)
@@ -976,8 +978,6 @@ class InterfaceApp:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
-
-
 
 
     def verificar_arquivo_individual(self):
