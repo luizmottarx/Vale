@@ -134,7 +134,6 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
             sheet.cell(row=10 + i, column=5, value=B_data.get('pore_press_Original', [])[i])  # E10 em diante
 
         # Preencher dados do estágio de Adensamento
-        # Preencher células AL7 a AU7 (colunas 38 a 47) com dados do estágio de adensamento
         ad_rows = len(adensamento_data.get('stage_no', []))
         ad_columns = [
             'stage_no', 'time_test_start', 'time_stage_start', 'rad_press_Original', 'rad_vol_Original',
@@ -150,91 +149,100 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
         # Preencher dados do estágio de Cisalhamento
         cis_rows = len(cisalhamento_data.get('stage_no', []))
 
-        # Calcula pore_press_0 como o primeiro valor de pore_press_Original no estágio de cisalhamento
+        # Calcular pore_press_0 como o primeiro valor de pore_press_Original no estágio de cisalhamento
         pore_press_0 = cisalhamento_data.get('pore_press_Original', [0])[0]
 
-        # Redução de dados para o estágio de Cisalhamento
-        cis_data_length = cis_rows
+        # Calcular eff_rad_stress = rad_press_Original - pore_press_Original
+        eff_rad_stress = [rad_p - pore_p for rad_p, pore_p in zip(
+            cisalhamento_data.get('rad_press_Original', []),
+            cisalhamento_data.get('pore_press_Original', [])
+        )]
 
-        # Obter os dados do estágio de cisalhamento
-        cis_columns = [
-            'time_test_start', 'rad_press_Original', 'back_press_Original', 'pore_press_Original',
-            'cur_area_A' if metodo == 'A' else 'cur_area_Original', 'ax_disp_Original', 'load_cell_Original',
-            'ax_strain_Original', 'dev_stress_Original'
-        ]
+        # Calcular eff_ax_stress_B = dev_stress_B + eff_rad_stress
+        dev_stress_B = cisalhamento_data.get('dev_stress_B', [])
+        eff_ax_stress_B = [dev + eff_rad for dev, eff_rad in zip(dev_stress_B, eff_rad_stress)]
 
-        # Calcula eff_ax_stress e eff_rad_press
-        eff_ax_stress = []
-        eff_rad_press = []
+        # Calcular stress_ratio = eff_ax_stress_B / eff_rad_stress
+        stress_ratio = [ea / er if er != 0 else None for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
 
-        for i in range(cis_rows):
-            load_cell = cisalhamento_data.get('load_cell_Original', [])[i]
-            rad_press = cisalhamento_data.get('rad_press_Original', [])[i]
-            pore_press = cisalhamento_data.get('pore_press_Original', [])[i]
-            eff_ax = load_cell - pore_press
-            eff_rad = rad_press - pore_press
-            eff_ax_stress.append(eff_ax)
-            eff_rad_press.append(eff_rad)
+        # Calcular pore_press_diff = pore_press_Original - pore_press_0
+        pore_press_diff = [pp - pore_press_0 for pp in cisalhamento_data.get('pore_press_Original', [])]
 
-        # Cálculos adicionais
-        time_test_start = cisalhamento_data.get('time_test_start', [])
-        time_test_start_div_60 = [t / 60 for t in time_test_start]
-        eff_ax_stress_div_eff_rad_press = [ea / er if er != 0 else None for ea, er in zip(eff_ax_stress, eff_rad_press)]
-        pore_press_diff = [pore_press_0 - pp for pp in cisalhamento_data.get('pore_press_Original', [])]
-        eff_stress_avg = [(ea + er) / 2 for ea, er in zip(eff_ax_stress, eff_rad_press)]
-        eff_stress_diff = [(ea - er) / 2 for ea, er in zip(eff_ax_stress, eff_rad_press)]
+        # Calcular eff_stress_avg = (eff_ax_stress_B + eff_rad_stress)/2
+        eff_stress_avg = [(ea + er)/2 for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
 
-        # Prepare data for filling
+        # Calcular eff_stress_diff = (eff_ax_stress_B - eff_rad_stress)/2
+        eff_stress_diff = [(ea - er)/2 for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
+
+        # Ajustar back_vol_Original subtraindo o primeiro valor no estágio
+        back_vol_Original = cisalhamento_data.get('back_vol_Original', [])
+        if back_vol_Original:
+            first_back_vol_Original = back_vol_Original[0]
+            adjusted_back_vol_Original = [value - first_back_vol_Original for value in back_vol_Original]
+        else:
+            adjusted_back_vol_Original = []
+
+        # Ajustar ax_disp_Original subtraindo o primeiro valor no estágio
+        ax_disp_Original = cisalhamento_data.get('ax_disp_Original', [])
+        if ax_disp_Original:
+            first_ax_disp_Original = ax_disp_Original[0]
+            adjusted_ax_disp_Original = [value - first_ax_disp_Original for value in ax_disp_Original]
+        else:
+            adjusted_ax_disp_Original = []
+
+        # Utilizar ax_strain sem multiplicar por 100
+        ax_strain_percent = cisalhamento_data.get('ax_strain', [])
+
+        # Calcular Corrected Deviator Stress (q) = dev_stress_B
+        corrected_deviator_stress = dev_stress_B
+
+        # Preparar dados para preenchimento
         cis_data = {
-            'time_test_start': time_test_start,
-            'time_test_start_div_60': time_test_start_div_60,
+            'time_stage_start': cisalhamento_data.get('time_stage_start', []),
+            'time_stage_start_div_60': [t / 60 for t in cisalhamento_data.get('time_stage_start', [])],
             'rad_press_Original': cisalhamento_data.get('rad_press_Original', []),
             'back_press_Original': cisalhamento_data.get('back_press_Original', []),
             'pore_press_Original': cisalhamento_data.get('pore_press_Original', []),
-            'cur_area': cisalhamento_data.get('cur_area_A' if metodo == 'A' else 'cur_area_Original', []),
-            'ax_disp_Original': cisalhamento_data.get('ax_disp_Original', []),
+            'adjusted_back_vol_Original': adjusted_back_vol_Original,
+            'adjusted_ax_disp_Original': adjusted_ax_disp_Original,
             'load_cell_Original': cisalhamento_data.get('load_cell_Original', []),
-            'ax_strain_Original': cisalhamento_data.get('ax_strain_Original', []),
-            'dev_stress_Original': cisalhamento_data.get('dev_stress_Original', []),
-            'eff_ax_stress_div_eff_rad_press': eff_ax_stress_div_eff_rad_press,
+            'ax_strain_percent': ax_strain_percent,
+            'corrected_deviator_stress': corrected_deviator_stress,
+            'stress_ratio': stress_ratio,
             'pore_press_diff': pore_press_diff,
             'eff_stress_avg': eff_stress_avg,
             'eff_stress_diff': eff_stress_diff
         }
 
-        # Redução dos dados conforme especificado
-        # Obter as primeiras 30 linhas
-        first_30_indices = list(range(min(30, cis_data_length)))
-        # Restante dos dados
-        remaining_indices = list(range(30, cis_data_length))
-
-        # Dividir o restante dos dados em 10 partes e selecionar a primeira linha de cada parte
-        num_parts = 10
-        if remaining_indices:
-            indices_per_part = max(len(remaining_indices) // num_parts, 1)
-            sampled_indices = [remaining_indices[i * indices_per_part] for i in range(num_parts) if i * indices_per_part < len(remaining_indices)]
-        else:
-            sampled_indices = []
-
-        # Combinar os índices
-        cis_indices = first_30_indices + sampled_indices
-
-        # Ordenar os índices
-        cis_indices.sort()
-
         # Colunas a serem preenchidas e seus índices de coluna no Excel
         cis_column_names = [
-            'time_test_start', 'time_test_start_div_60', 'rad_press_Original', 'back_press_Original',
-            'pore_press_Original', 'cur_area', 'ax_disp_Original', 'load_cell_Original', 'ax_strain_Original',
-            'dev_stress_Original', 'eff_ax_stress_div_eff_rad_press', 'pore_press_diff', 'eff_stress_avg',
-            'eff_stress_diff'
+            'time_stage_start',                  # R7
+            'time_stage_start_div_60',           # S7
+            'rad_press_Original',                # T7
+            'back_press_Original',               # U7
+            'pore_press_Original',               # V7
+            'adjusted_back_vol_Original',        # W7
+            'adjusted_ax_disp_Original',         # X7
+            'load_cell_Original',                # Y7
+            'ax_strain_percent',                 # Z7
+            'corrected_deviator_stress',         # AA7
+            'stress_ratio',                      # AB7
+            'pore_press_diff',                   # AC7
+            'eff_stress_avg',                    # AD7
+            'eff_stress_diff'                    # AE7
         ]
         cis_column_indices = [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]  # R(18) a AE(31)
 
+        cis_rows_to_fill = len(cis_data['time_stage_start'])
+
         # Preencher os dados nas células especificadas
-        for idx_row, data_idx in enumerate(cis_indices):
+        for idx_row in range(cis_rows_to_fill):
             for idx_col, col_name in enumerate(cis_column_names):
-                value = cis_data[col_name][data_idx]
+                value_list = cis_data[col_name]
+                if idx_row < len(value_list):
+                    value = value_list[idx_row]
+                else:
+                    value = None
                 sheet.cell(row=7 + idx_row, column=cis_column_indices[idx_col], value=value)
 
     # Salvar e fechar o workbook
