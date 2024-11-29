@@ -287,7 +287,6 @@ class InterfaceApp:
         tk.Button(button_frame, text="Aplicar", command=apply_filter, width=15).pack(side="left", padx=5)
         tk.Button(button_frame, text="Cancelar", command=filter_window.destroy, width=15).pack(side="right", padx=5)
 
-
     def check_login(self):
         user = self.user_entry.get()
         password = self.password_entry.get()
@@ -368,8 +367,6 @@ class InterfaceApp:
             self.plotar_graficos_arquivo(arquivo_selecionado)
         else:
             messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
-
-
 
     # Fluxo Encontrar Arquivos
     def find_files(self):
@@ -692,7 +689,6 @@ class InterfaceApp:
         else:
             messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
 
-
     def update_amostra_list(self):
         search_text = self.search_var.get().strip().lower()
         if search_text == "":
@@ -704,7 +700,6 @@ class InterfaceApp:
         for amostra in self.filtered_amostras:
             self.amostra_listbox.insert(tk.END, amostra)
 
-
     def avancar_amostra(self):
         selection = self.amostra_listbox.curselection()
         if selection:
@@ -715,7 +710,6 @@ class InterfaceApp:
         else:
             messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
             return
-
 
     def mostrar_ensaios_amostra(self, amostra_selecionada):
         # Remova self.clear_screen()
@@ -736,7 +730,6 @@ class InterfaceApp:
 
         # Plotar os gráficos com todos os arquivos selecionados
         self.plotar_graficos_amostra(amostra_selecionada)
-
 
     def selecionar_arquivos_amostra(self, amostra_selecionada):
         self.clear_screen()
@@ -768,7 +761,6 @@ class InterfaceApp:
 
         tk.Button(button_frame, text="Plotar Gráficos", command=lambda: self.plotar_graficos_amostra(amostra_selecionada), width=20).grid(row=0, column=0, padx=5)
         tk.Button(button_frame, text="Voltar", command=self.verificar_ensaio_screen, width=20).grid(row=0, column=1, padx=5)
-
 
     def configurar_escalas(self, fig, axs):
         config_window = tk.Toplevel(self.root)
@@ -819,7 +811,6 @@ class InterfaceApp:
 
         tk.Button(scroll_frame, text="Aplicar", command=lambda: self.aplicar_escalas(entries, fig, config_window)).pack(pady=10)
 
-
     def aplicar_escalas(self, entries, fig, config_window):
         for entry in entries:
             ax = entry['ax']
@@ -839,7 +830,6 @@ class InterfaceApp:
 
         fig.canvas.draw_idle()
         config_window.destroy()
-
 
     def plotar_graficos_arquivo(self, arquivo_selecionado):
         try:
@@ -1158,7 +1148,6 @@ class InterfaceApp:
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
 
-
     def gerar_planilha_cliente_screen(self):
         self.clear_screen()
         self.root.title("Gerar Planilha Cliente")
@@ -1181,7 +1170,6 @@ class InterfaceApp:
         tk.Button(frame, text="Avançar", command=self.avancar_amostra, width=15).pack(pady=10)
 
         tk.Button(frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).pack(pady=10)
-
 
     def selecionar_tipo_ensaio(self):
         # Sempre obter a seleção atual da listbox
@@ -1212,7 +1200,6 @@ class InterfaceApp:
 
         tk.Button(frame, text="Avançar", command=self.selecionar_metodo, width=15).pack(pady=10)
         tk.Button(frame, text="Voltar", command=self.gerar_planilha_cliente_screen, width=15).pack(pady=10)
-
 
     def selecionar_metodo(self):
         # Sempre obter a seleção atual da listbox
@@ -1345,9 +1332,7 @@ class InterfaceApp:
             messagebox.showinfo("Sucesso", f"Planilha gerada com sucesso com os arquivos selecionados.")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
-
-
-       
+     
     # Gerenciamento de Usuários
     def add_user_screen(self):
         self.clear_screen()
