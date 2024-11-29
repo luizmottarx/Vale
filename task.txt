@@ -9,11 +9,9 @@ Cisalhamento--- somente o stage do valor do Cisalhamento
 os cabeçalhos são da linha anterior as abaixo : (não precisa preencher pois ja esta nomeado na pagina ModeloIndividual) 
  preencher dessas células, para baixo: R7, S7, T7, U7, V7, W7, X7, Y7, Z7, AA7, AB7, AC7, AD7, AE7
 a quantidade de dados , deve ser reduzida, nao quero todo o stage de cisalhamento preenchido na tabela, mantendo as primeiras 30 linhas do dataframe obtido e abaixo dividir as linhas por 10.
-
 Adensamento--- somente o stage do valor de Adensamento 
 preencher dessas células, para baixo: AL7, AM7, AN7, AO7, AP7, AQ7, AR7, AS7, AT7, AU7
 Cada arquivo é relacionado com TipoEnsaio e Amostra, ou seja, a planilha final vai conter todos os arquivos que possuem a mesma Amostra e o mesmo TipoEnsaio.(preciso que na interface, mostre qual amostra o usuário quer gerar a planilha, depois qual TipoEnsaio daquela amostra ele quer, por exemplo, nos arquivos individuais o nome completo é :AM00123-12_TIR_S_Seq.1.gds, AM00123-12_TIR_S_Seq.2.gds, AM00123-12_TIR_S_Seq.3.gds, ou seja, todos esses arquivos tem o mesmo TipoEnsaio 'TIR_S', onde vão ter 3 páginas no excel preenchidas além da pagina 'Report'), depois de selecionar o TipoEnsaio desejado, escolher a Amostra, gerar a planilha filtrada corretamente.
-
 ****Verificar como preencher excel, tamanho do arquivo, desempenho da aplicação****
 
 04/11
@@ -34,21 +32,17 @@ mostrar todos os arquivos encontrados com statusIndividual= Refugado, permitir s
 
 
 
-
-
 CORREÇÕES 06/11 # Modelagem BDD
 TABELAS:
 Amostra: id_amostra, amostra, statusAmostra 
 Ensaio: id_ensaio, id_tipo, id_amostra, NomeCompleto, ensaio, statusIndividual
 TipoEnsaio: id_tipo, tipo
 EnsaiosTriaxiais: id, id_ensaio, id_amostra, id_tipo, NomeCompleto 
-
 de acordo com o NomeCompleto, ou nome do arquivo, exemplo: 'TER_IS_AM00123-12_Seq.01.gds' foi feito salvo da seguinte forma incorreta : tipo= IS_AM00123-12, amostra=TER
 o correto seria, 
 AM00123-12 = amostra
 TER_IS ou TIR_S = tipo
 Seq.01 = ensaio 
-
 vão ser dois TipoEnsaio lidos ou TER_IS OU TIR_S e a amostra vai ser em seguida 'AMxxxx-xx'
 preciso corrigir oque ja esta no meu banco de dados somente alterando as tabelas e colunas incorretas Amostra[amostra] e TipoEnsaio[tipo]
 quero um passo a passo de como corrigir pelo SQlite browser
@@ -77,3 +71,17 @@ adicionar no interface.py
 permitir que o usuário seleciona Método A ou Método B
 em seguida, selecionar quais arquivos individuais encontrados, ele quer preencher a planilha final, depois de selecionar TER OU TIR, depois Metodo A ou Metodo B, depois selecionar até 5 arquivos arquivos individuais e gerar planilha final
 rastreie no codigo da interface.py a função de gerar planilha final e adicione esses caminhos em seguida de TER/TIR
+
+
+27/11
+ajustar seleção TIR/TER
+correção de excel
+correção de colunas calculadas
+
+
+28/11
+correção no preenchimento do excel
+corrigir caminho de plotar graficos da amostra geral
+
+quando o usuario clica em 'Verificar Ensaio', seleciona a Amostra e clica em 'Ver Gráficos da amostra' , está indo em um fluxo incorreto, para selecionar o TipoEnsaio o fluxo responsável por gerar planilha final .
+quando o usuario clicar em 'Ver Gráficos da Amostra', preciso é chamado outro fluxo para plotar os graficos com todos os arquivos da amostra encontrados(esta funcionalidade ja está declarada nas funções do codigo)
