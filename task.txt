@@ -85,3 +85,7 @@ corrigir caminho de plotar graficos da amostra geral
 
 quando o usuario clica em 'Verificar Ensaio', seleciona a Amostra e clica em 'Ver Gráficos da amostra' , está indo em um fluxo incorreto, para selecionar o TipoEnsaio o fluxo responsável por gerar planilha final .
 quando o usuario clicar em 'Ver Gráficos da Amostra', preciso é chamado outro fluxo para plotar os graficos com todos os arquivos da amostra encontrados(esta funcionalidade ja está declarada nas funções do codigo)
+
+02/12
+corrigir sinal void ratio
+verificar como coorigir/tratar erro do arquivo
