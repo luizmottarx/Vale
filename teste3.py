@@ -1,4 +1,4 @@
-# teste3.py
+# teste3_atualizado.py
 
 import os
 import pandas as pd
@@ -131,7 +131,7 @@ class TableProcessor:
             df['ax_strain'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
                 df['ax_disp'] / h_init,
-                ((-metadados_parte2.ax_disp_c) + df['ax_disp']) / (h_init - df['ax_disp']).replace(0, np.nan)
+                (df['ax_disp'] - metadados_parte2.ax_disp_c) / (h_init - df['ax_disp']).replace(0, np.nan)
             )
 
             # Converter 'ax_strain' para porcentagem
@@ -144,11 +144,7 @@ class TableProcessor:
             df['vol_strain'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
                 df['back_vol'] / v_0,
-                np.where(
-                    metadados_parte2.v_c_B != 0,
-                    (-df['back_vol'] + metadados_parte2.back_vol_c) / metadados_parte2.v_c_B,
-                    np.nan
-                )
+                (metadados_parte2.back_vol_c - df['back_vol']) / (metadados_parte2.cons_void_vol + vol_solid)
             )
 
             # Converter 'vol_strain' para porcentagem
@@ -163,33 +159,33 @@ class TableProcessor:
             df['vol_B'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
                 v_0 - df['back_vol'],
-                metadados_parte2.v_c_B - (df['back_vol'] - metadados_parte2.back_vol_c)
+                metadados_parte2.cons_void_vol + vol_solid - (df['back_vol'] - metadados_parte2.back_vol_c)
             )
 
             # Cálculo da área atual B com condição
             df['cur_area_B'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
                 (df['vol_B'] / df['height'].replace(0, np.nan)) * 1e-6,  # Convertendo para m²
-                (metadados_parte2.consolidated_area / 1e6) * (
+                metadados_parte2.consolidated_area * (
                     (1 - (df['vol_strain'] / 100)) / (1 - (df['ax_strain'] / 100)).replace(0, np.nan)
                 )
             )
 
-            # Cálculo da tensão efetiva radial
-            df['eff_rad_stress'] = df['rad_press'] - df['pore_press_Original']
+            # Cálculo da tensão radial efetiva
+            df['eff_rad_stress'] = df['rad_press_Original'] - df['pore_press_Original']
 
-            # Cálculo da tensão desviadora A e B iniciais
+            # Cálculo da tensão desviadora A e B
             df['dev_stress_A'] = df['load'] / df['cur_area_A'].replace(0, np.nan)
             df['dev_stress_B'] = df['load'] / df['cur_area_B'].replace(0, np.nan)
 
             df['su_A'] = df['dev_stress_A'] / 2
             df['su_B'] = df['dev_stress_B'] / 2
 
-            # Recalcular void_ratio_B e void_ratio_A
-            df['void_ratio_B'] = (df['vol_B'] - vol_solid) / vol_solid
+            # Cálculo de void_ratio_B e void_ratio_A
+            df['void_ratio_B'] = (metadados_parte2.cons_void_vol - (metadados_parte2.back_vol_c - df['back_vol'])) / vol_solid
             df['void_ratio_A'] = (df['vol_A'] - vol_solid) / vol_solid
 
-            # Cálculo da tensão axial efetiva A e B
+            # Cálculo da tensão efetiva axial A e B
             df['eff_ax_stress_A'] = df['dev_stress_A'] + df['eff_rad_stress']
             df['eff_ax_stress_B'] = df['dev_stress_B'] + df['eff_rad_stress']
 
@@ -212,7 +208,7 @@ class TableProcessor:
             # Excesso de pressão de poros
             df['excessPWP'] = df['pore_press_Original'] - df['back_press']
 
-            # Resistência não drenada (corrigindo o sinal invertido)
+            # Resistência não drenada
             cis_stage_data = df[df['stage_no'] == Cisalhamento_stage]
             pore_press_cis_first_value = cis_stage_data['pore_press_Original'].iloc[0] if not cis_stage_data.empty else np.nan
             df['du_kpa'] = df['pore_press_Original'] - pore_press_cis_first_value
@@ -445,7 +441,8 @@ class METADADOS_PARTE2:
             self.back_vol_f = 0
 
         self.v_c_A = self.v_0 - self.back_vol_c
-        self.v_c_B = ((self.back_vol_c - self.back_vol_f) + self.v_w_f) + self.vol_solid
+        self.cons_void_vol = self.v_w_f + (self.back_vol_c - self.back_vol_f)
+        self.v_c_B = self.cons_void_vol + self.vol_solid
 
         self.w_c_A = safe_divide(self.v_c_A, self.init_dry_mass)
         self.w_c_B = safe_divide(self.v_c_B, self.init_dry_mass)
@@ -472,17 +469,16 @@ class METADADOS_PARTE2:
         else:
             self.vol_change_f_c = 0
 
-        # Já calculado anteriormente
-        self.cons_void_vol = self.v_w_f + (self.back_vol_c - self.back_vol_f)
+        self.final_void_vol = self.vol_solid * self.void_ratio_f
+
+        # Cálculo de post_cons_void
         self.post_cons_void = safe_divide(
             self.cons_void_vol,
             self.vol_solid
         )
 
-        self.final_void_vol = self.vol_solid * self.void_ratio_f
-
-        # Manter o valor de consolidated_area
-        self.consolidated_area = safe_divide(self.cons_void_vol + self.vol_solid, self.h_init_c)
+        # Atualizar 'consolidated_area' multiplicando por 0.000001
+        self.consolidated_area = safe_divide(self.cons_void_vol + self.vol_solid, self.h_init_c) * 0.000001
 
         if 'camb_p_Original' in ad_stage_data.columns and not ad_stage_data['camb_p_Original'].empty:
             self.camb_p_A0 = ad_stage_data['camb_p_Original'].iloc[-1]
