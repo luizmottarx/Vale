@@ -9,6 +9,8 @@ def encontrar_arquivos(diretorio):
     """
     Encontra e retorna uma lista de arquivos Excel ou CSV no diretório especificado.
     """
+    if not os.path.exists(diretorio):
+        raise FileNotFoundError(f"O diretório especificado não existe: {diretorio}")
     arquivos = [f for f in os.listdir(diretorio) if f.endswith(('.xlsx', '.xls', '.csv'))]
     return arquivos
 
@@ -16,12 +18,16 @@ def ler_arquivo(caminho_arquivo):
     """
     Lê um arquivo Excel ou CSV e retorna um DataFrame.
     """
-    if caminho_arquivo.endswith(('.xlsx', '.xls')):
-        return pd.read_excel(caminho_arquivo)
-    elif caminho_arquivo.endswith('.csv'):
-        return pd.read_csv(caminho_arquivo)
-    else:
-        raise ValueError(f"Formato de arquivo não suportado: {caminho_arquivo}")
+    try:
+        if caminho_arquivo.endswith(('.xlsx', '.xls')):
+            return pd.read_excel(caminho_arquivo)
+        elif caminho_arquivo.endswith('.csv'):
+            # Define explicitamente o separador como ponto e vírgula
+            return pd.read_csv(caminho_arquivo, delimiter=';', on_bad_lines='skip')
+        else:
+            raise ValueError(f"Formato de arquivo não suportado: {caminho_arquivo}")
+    except pd.errors.ParserError as e:
+        raise ValueError(f"Erro ao ler o arquivo {caminho_arquivo}: {e}")
 
 def main():
     st.title("Comparação de Colunas entre Dois Arquivos")
@@ -29,32 +35,49 @@ def main():
     # Especifique o diretório contendo os arquivos Excel ou CSV
     diretorio = r'C:\Users\lgv_v\Documents\LUIZ\compararExcel'  # Substitua pelo caminho do seu diretório
 
-    # Encontrar arquivos Excel ou CSV no diretório
-    arquivos = encontrar_arquivos(diretorio)
+    # Verificar se o diretório existe
+    try:
+        arquivos = encontrar_arquivos(diretorio)
+    except FileNotFoundError as e:
+        st.error(e)
+        return
+
     if len(arquivos) < 2:
         st.error("Menos de dois arquivos Excel ou CSV encontrados no diretório.")
         return
 
     # Permitir que o usuário selecione os arquivos
-    arquivo1_nome = st.selectbox("Selecione o primeiro arquivo:", arquivos)
-    arquivo2_nome = st.selectbox("Selecione o segundo arquivo:", arquivos, index=1)
+    arquivo1_nome = st.selectbox("Selecione o primeiro arquivo:", arquivos, key='arquivo1')
+    arquivo2_nome = st.selectbox("Selecione o segundo arquivo:", arquivos, index=1, key='arquivo2')
 
     arquivo1 = os.path.join(diretorio, arquivo1_nome)
     arquivo2 = os.path.join(diretorio, arquivo2_nome)
 
     # Ler os arquivos em DataFrames
-    df1 = ler_arquivo(arquivo1)
-    df2 = ler_arquivo(arquivo2)
+    try:
+        df1 = ler_arquivo(arquivo1)
+        df2 = ler_arquivo(arquivo2)
+    except ValueError as e:
+        st.error(e)
+        return
 
     st.subheader("Seleção de Colunas para Comparação")
 
-    # Selecionar as colunas para comparação de cada arquivo
-    coluna_selecionada1 = st.selectbox(f"Selecione a coluna do {arquivo1_nome} para comparar:", df1.columns)
-    coluna_selecionada2 = st.selectbox(f"Selecione a coluna do {arquivo2_nome} para comparar:", df2.columns)
+    # Exibir a lista de colunas disponíveis para cada arquivo
+    coluna_selecionada1 = st.selectbox(
+        f"Selecione a coluna do {arquivo1_nome} para comparar:", df1.columns, key='coluna1'
+    )
+    coluna_selecionada2 = st.selectbox(
+        f"Selecione a coluna do {arquivo2_nome} para comparar:", df2.columns, key='coluna2'
+    )
 
     # Converter as colunas selecionadas para numérico
-    serie1 = pd.to_numeric(df1[coluna_selecionada1], errors='coerce')
-    serie2 = pd.to_numeric(df2[coluna_selecionada2], errors='coerce')
+    try:
+        serie1 = pd.to_numeric(df1[coluna_selecionada1], errors='coerce').dropna()
+        serie2 = pd.to_numeric(df2[coluna_selecionada2], errors='coerce').dropna()
+    except KeyError as e:
+        st.error(f"Erro ao acessar as colunas selecionadas: {e}")
+        return
 
     # Garantir que ambas as séries tenham o mesmo tamanho
     min_length = min(len(serie1), len(serie2))
@@ -64,8 +87,8 @@ def main():
     # Criar um DataFrame combinado para facilitar o plot
     df_combined = pd.DataFrame({
         'Índice': range(min_length),
-        f'{coluna_selecionada1} - {arquivo1_nome}': serie1,
-        f'{coluna_selecionada2} - {arquivo2_nome}': serie2
+        f'{coluna_selecionada1} ({arquivo1_nome})': serie1,
+        f'{coluna_selecionada2} ({arquivo2_nome})': serie2
     }).set_index('Índice')
 
     # Calcular a diferença entre as colunas
@@ -73,7 +96,7 @@ def main():
 
     # Plotar o gráfico comparativo
     st.subheader(f"Comparação das colunas: {coluna_selecionada1} ({arquivo1_nome}) vs {coluna_selecionada2} ({arquivo2_nome})")
-    st.line_chart(df_combined[[f'{coluna_selecionada1} - {arquivo1_nome}', f'{coluna_selecionada2} - {arquivo2_nome}']])
+    st.line_chart(df_combined[[f'{coluna_selecionada1} ({arquivo1_nome})', f'{coluna_selecionada2} ({arquivo2_nome})']])
 
     # Plotar o gráfico da diferença entre os valores
     st.subheader("Gráfico da Diferença entre os Valores")
@@ -88,8 +111,8 @@ def main():
 
     # Gráfico de dispersão dos valores dos dois arquivos
     fig1, ax1 = plt.subplots()
-    ax1.scatter(df_combined.index, df_combined.iloc[:, 0], label=f'{coluna_selecionada1} - {arquivo1_nome}', alpha=0.7)
-    ax1.scatter(df_combined.index, df_combined.iloc[:, 1], label=f'{coluna_selecionada2} - {arquivo2_nome}', alpha=0.7)
+    ax1.scatter(df_combined.index, df_combined.iloc[:, 0], label=f'{coluna_selecionada1} ({arquivo1_nome})', alpha=0.7)
+    ax1.scatter(df_combined.index, df_combined.iloc[:, 1], label=f'{coluna_selecionada2} ({arquivo2_nome})', alpha=0.7)
     ax1.set_xlabel('Índice')
     ax1.set_ylabel('Valor')
     ax1.set_title('Dispersão dos Valores dos Dois Arquivos')
@@ -107,8 +130,8 @@ def main():
     # Gráfico de dispersão dos valores do Arquivo 1 vs Arquivo 2
     fig3, ax3 = plt.subplots()
     ax3.scatter(df_combined.iloc[:, 0], df_combined.iloc[:, 1], alpha=0.7)
-    ax3.set_xlabel(f'{coluna_selecionada1} - {arquivo1_nome}')
-    ax3.set_ylabel(f'{coluna_selecionada2} - {arquivo2_nome}')
+    ax3.set_xlabel(f'{coluna_selecionada1} ({arquivo1_nome})')
+    ax3.set_ylabel(f'{coluna_selecionada2} ({arquivo2_nome})')
     ax3.set_title(f'Dispersão: {arquivo1_nome} vs {arquivo2_nome}')
     st.pyplot(fig3)
 
@@ -130,7 +153,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-#PARA RODAR, DIGITAR PELO PROMPT:
-#                           cd C:\Users\lgv_v\Documents\LUIZ
-#                           streamlit run compararExcel.py
+# PARA RODAR, DIGITAR PELO PROMPT:
+# cd C:\Users\lgv_v\Documents\LUIZ
+# streamlit run compararExcel.py
