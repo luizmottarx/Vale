@@ -87,5 +87,68 @@ quando o usuario clica em 'Verificar Ensaio', seleciona a Amostra e clica em 'Ve
 quando o usuario clicar em 'Ver Gráficos da Amostra', preciso é chamado outro fluxo para plotar os graficos com todos os arquivos da amostra encontrados(esta funcionalidade ja está declarada nas funções do codigo)
 
 02/12
-corrigir sinal void ratio
+corrigir sinal void ratio/ valores do gráfico invertidos
+mudar nome do arquivo de como o arquivo é lido de TER_IS_AM00123-12_Seq.01.gds para AM00622-27_TIR_S_Seq.30.gds
 verificar como coorigir/tratar erro do arquivo
+
+
+03/12
+preciso corrigir os graficos plotados na amostra geral, os valores.
+
+/////
+04/12
+preciso remodelar a base de dados da seguinte maneira:
+
+duas tabelas com id e valor fixos:
+
+nome da tabela: "metadadostable"
+coluna de índice, coluna de id : 'idmetadados'
+coluna de nomes, já pré-definidos no código : 'metadado'
+
+nome da tabela: "tipoensaio"
+coluna de índice, coluna de id : 'idtipoensaio'
+coluna de tipos, já pré-definidos no código : 'tipo'
+todos os tipos: 'ADTIR_B', 'ADTIR_B', 'ADTIR_B_I', 'ADTIR_HP', 'ADTIR_K0_B_I', 'ADTIR_S', 'CSL', 'CSS', 'CTER_IS', 'CTER_IS_B', 'CTER_IS_B_I', 'CTIR', 'CTIR_S', 'CTIR_S_B', 'CCTIR_S_B_I', 'TER_IS', 'TER_IS_B', 'TIR_S', 'TIR_S_B'
+
+criar as seguintes tabelas que vão ser alimentadas a partir do arquivo lido:
+nome da tabela: 'contrato'
+nome da coluna: 'idcontrato'
+
+nome da tabela: 'campanha'
+nome das colunas: 'idcontrato', 'idcampanha'
+
+nome da tabela: 'amostra'
+nome das colunas: 'idcontrato', 'idcampanha', 'idamostra'
+
+
+nome da tabela: 'ensaio'
+nome das colunas: 'idcontrato', 'idcampanha', 'idamostra', 'idtipoensaio'
+sendo idtipoensaio, o índice retirado da tabela tipoensaio
+
+
+nome da tabela: 'cp'
+nome das colunas: 'idcontrato', 'idcampanha', 'idamostra', 'idtipoensaio', 'sequencial', 'nome', 'idnome', 'status'
+sendo status, que pode ser 'Aprovado', 'Refugado' ou 'NV', vai ser atualizado apartir da interface com o usuario
+sendo o nome = a concatenação  de 'contrato'_'campanha'_'ensaio'_'tipoensaio'_'sequencial', retirado das tabelas anteriores com os valores relacionados
+sendo idnome um índice somente para a concatenação do nome.
+
+
+nome da tabela: 'metadadosarquivo'
+nome das colunas: 'idmetadados', 'idnome', 'valormetadados'
+valormetadados, sendo o valor de cada metadado do idnome especifico
+
+
+nome da tabela: 'ensaiostriaxiais'
+nome das colunas: 'idnome', ..... e o restante das colunas calculadas e declaradas no codigo
+
+
+
+em seguida preciso alterar a lógica de como vai ser salvo e relacionado o banco de dados. no código atual está salvando a partir da leitura do nome do arquivo, que é retirado o nome da amostra, qual o ensaio, qual o sequencial etc.
+altere a lógica do código para buscar a partir do metadado encontrado e salvo de cada arquivo .gds, sem importar com o nome do mesmo.
+preciso retirar os valores dos seguintes metadados específicados que vão ser declarados entre as "".
+
+"Job reference:","" = idcontrato
+"Borehole:","" = idcampanha
+"Sample Name:","" = idamostra
+"Description of Sample:","" = tipo
+"Test Number:","" = sequencial
