@@ -1,33 +1,30 @@
 # teste2.py
 
 import os
+from teste1 import FileProcessor  # Importar FileProcessor do teste1.py
 
 class StageProcessor:
     @staticmethod
     def process_stage_data(directory, gds_file, metadados):
         try:
-            # Mapeamento de chaves para nomes internos
+            # Mapeamento de chaves originais para nomes internos desejados
             metadados_definidos = {
                 "_B": "B",
                 "_ad": "Adensamento",
                 "_cis": "Cisalhamento",
-                "Volume de agua medio inicial":"w_0",
-                "Volume de agua medio final":"w_f",
+                "Volume de agua medio inicial": "w_0",
+                "Volume de agua medio final": "w_f",
                 "Initial Height (mm)": "h_init",
                 "Initial Diameter (mm)": "d_init",
                 "Ram Diameter": "ram_diam",
                 "Specific Gravity (kN/m³):": "spec_grav",
-                "Job reference:": "job_ref",
-                "Borehole:": "borehole",
-                "Sample Name:": "samp_name",
+                "Job reference:": "idcontrato",          # Agora mapeia para idcontrato
+                "Borehole:": "idcampanha",               # Agora mapeia para idcampanha
+                "Sample Name:": "idamostra",             # Agora mapeia para idamostra
+                "Description of Sample:": "tipoensaio",   # Agora mapeia para tipoensaio (string)
+                "Test Number:": "sequencial",            # Agora mapeia para sequencial
                 "Depth:": "depth",
                 "Sample Date (dd/mm/yyyy):": "samp_date",
-                "Description of Sample:": "samp_desc",
-                "Initial mass (g):": "init_mass",
-                "Initial dry mass (g):": "init_dry_mass",
-                "Specific Gravity (ass/meas):": "spec_grav_am",
-                "Date Test Started:": "test_start",
-                "Date Test Finished:": "test_end",
                 "Specimen Type (dis/undis):": "spec_type",
                 "Top Drain Used (y/n):": "top_drain",
                 "Base Drain Used (y/n)": "base_drain",
@@ -40,7 +37,6 @@ class StageProcessor:
                 "Ring No.:": "ring_no",
                 "Job Location:": "job_loc",
                 "Membrane Thickness (mm):": "mem_thick",
-                "Test Number:": "test_no",
                 "Technician Name:": "tech_name",
                 "Sample Liquid Limit (%):": "liq_lim",
                 "Sample Plastic Limit (%):": "plas_lim",
@@ -77,7 +73,7 @@ class StageProcessor:
                 if chave_original in metadados:
                     metadados_valores[chave_interna] = metadados[chave_original]
 
-            # Definir valores padrão usando as chaves internas
+            # Definir valores padrão usando as chaves internas, se não existirem nos metadados
             metadados_valores.setdefault("B", "5")
             metadados_valores.setdefault("Adensamento", "7")
             metadados_valores.setdefault("Cisalhamento", "8")
@@ -95,9 +91,25 @@ class StageProcessor:
             print(f"Erro ao processar o estágio dos dados: {e}")
             return None
 
+# O restante do código permanece inalterado
+
+
 if __name__ == "__main__":
     directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
     arquivos = os.listdir(directory)
     for arquivo in arquivos:
         if arquivo.endswith('.gds'):
-            StageProcessor.process_stage_data(directory, os.path.join(directory, arquivo), [])
+            # Processar o arquivo para obter os metadados
+            processor = FileProcessor(directory)
+            gds_file_path = os.path.join(directory, arquivo)
+            metadados = processor.process_gds_file(gds_file_path)
+            if metadados:
+                # Processar os dados de estágio com os metadados
+                metadados_processados = StageProcessor.process_stage_data(directory, gds_file_path, metadados)
+                # Exibir os metadados processados
+                print(f"Metadados processados para o arquivo '{arquivo}':")
+                for chave, valor in metadados_processados.items():
+                    print(f"{chave}: {valor}")
+                print("\n")
+            else:
+                print(f"Erro ao processar o arquivo '{arquivo}'.")
