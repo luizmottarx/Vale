@@ -1,13 +1,13 @@
-# teste3_atualizado.py
+# teste3.py
 
 import os
 import pandas as pd
 import numpy as np
-from testeBD import process_file_for_db, safe_float_conversion
+from testeBD import safe_float_conversion
 
 class TableProcessor:
     @staticmethod
-    def process_table_data(metadados, gds_file):
+    def process_table_data(db_manager, metadados, gds_file):
         try:
             # Ler o arquivo .gds pulando as primeiras 57 linhas
             df = pd.read_csv(gds_file, encoding='latin-1', skiprows=57)
@@ -290,9 +290,9 @@ class TableProcessor:
                 df_to_save.loc[:, col] = pd.to_numeric(df_to_save[col], errors='coerce')
 
             # Salvar no banco de dados
-            process_file_for_db(df_to_save, os.path.basename(gds_file), metadados)
+            #db_manager.save_to_database(metadados, df_to_save)
 
-            print(f"Dados processados e salvos no banco de dados para o arquivo: {os.path.basename(gds_file)}")
+            #print(f"Dados processados e salvos no banco de dados para o arquivo: {os.path.basename(gds_file)}")
 
             # Atualizar metadados com novos valores calculados
             metadados['dry_unit_weight'] = metadados_parte2.dry_unit_weight
@@ -303,10 +303,11 @@ class TableProcessor:
             metadados_parte2.print_attributes()
 
             # Retornar a instância de metadados_parte2
-            return metadados_parte2
+            return {'df': df_to_save, 'metadados_parte2': metadados_parte2}
 
         except Exception as e:
             print(f"Erro ao processar o arquivo '{gds_file}': {e}")
+            return None
 
 class CisalhamentoData:
     def __init__(self, df, metadados):
