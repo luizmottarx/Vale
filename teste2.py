@@ -1,115 +1,43 @@
 # teste2.py
 
 import os
-from teste1 import FileProcessor  # Importar FileProcessor do teste1.py
+from teste1 import FileProcessor
+from testeBD import DatabaseManager
 
 class StageProcessor:
     @staticmethod
     def process_stage_data(directory, gds_file, metadados):
+        """
+        Processa os metadados do arquivo .gds sem alterar as chaves.
+        Utiliza o mapeamento de metadados definido em testeBD.py.
+
+        Args:
+            directory (str): Diretório onde o arquivo .gds está localizado.
+            gds_file (str): Nome do arquivo .gds.
+            metadados (dict): Dicionário de metadados lidos do arquivo.
+
+        Returns:
+            dict: Dicionário de metadados completos sem alteração nas chaves.
+        """
         try:
-            # Mapeamento de chaves originais para nomes internos desejados
-            metadados_definidos = {
-                "_B": "B",
-                "_ad": "Adensamento",
-                "_cis": "Cisalhamento",
-                "Volume de agua medio inicial": "w_0",
-                "Volume de agua medio final": "w_f",
-                "Initial Height (mm)": "h_init",
-                "Initial Diameter (mm)": "d_init",
-                "Ram Diameter": "ram_diam",
-                "Specific Gravity (kN/m³):": "spec_grav",
-                "Job reference:": "idcontrato",          # Agora mapeia para idcontrato
-                "Borehole:": "idcampanha",               # Agora mapeia para idcampanha
-                "Sample Name:": "idamostra",             # Agora mapeia para idamostra
-                "Description of Sample:": "tipoensaio",   # Agora mapeia para tipoensaio (string)
-                "Test Number:": "sequencial",            # Agora mapeia para sequencial
-                "Depth:": "depth",
-                "Sample Date (dd/mm/yyyy):": "samp_date",
-                "Specimen Type (dis/undis):": "spec_type",
-                "Top Drain Used (y/n):": "top_drain",
-                "Base Drain Used (y/n)": "base_drain",
-                "Side Drains Used (y/n)": "side_drains",
-                "Final Mass:": "fin_mass",
-                "Final Dry Mass:": "fin_dry_mass",
-                "Machine No.:": "mach_no",
-                "Pressure System:": "press_sys",
-                "Cell No.:": "cell_no",
-                "Ring No.:": "ring_no",
-                "Job Location:": "job_loc",
-                "Membrane Thickness (mm):": "mem_thick",
-                "Technician Name:": "tech_name",
-                "Sample Liquid Limit (%):": "liq_lim",
-                "Sample Plastic Limit (%):": "plas_lim",
-                "Average Water Content of Sample Trimmings (%):": "avg_wc_trim",
-                "Additional Notes (info source or occurrence and size of large particles etc.):": "notes",
-                "% by mass of Sample retained on No. 4 sieve (Gravel):": "mass_no4",
-                "% by mass of Sample retained on No. 10 sieve (Coarse Sand):": "mass_no10",
-                "% by mass of Sample retained on No. 40 sieve (Medium Sand): ": "mass_no40",
-                "% by mass of Sample retained on No. 200 sieve (Fine Sand):": "mass_no200",
-                "% by mass of Sample Silt (0.074 to 0.005 mm):": "mass_silt",
-                "% by mass of Sample Clay (smaller than 0.005 mm):": "mass_clay",
-                "% by mass of Sample Colloids (smaller than 0.001 mm):": "mass_coll",
-                "Trimming Procedure (turntable/cutting shoe/direct test/ring lined sampler):": "trim_proc",
-                "Moisture Condition (natural moisture/inundated):": "moist_cond",
-                "Axial Stress at Inundation (kPa):": "ax_stress_inund",
-                "Description of Water Used:": "water_desc",
-                "Test Method (A/B):": "test_meth",
-                "Interpretation Procedure for Cv (1/2/Both):": "interp_cv",
-                "All Departures from Outlined ASTM D2435/D2435M-11 Procedure:": "astm_dep",
-                "Specify how the water content was obtained (cuttings/entire specimen):": "wc_obt",
-                "Specify method for specimen saturation (dry method/wet method):": "sat_meth",
-                "Specify method to determine post-consolidation specimen area (A/B/A and B):": "post_consol_area",
-                "Specify failure criterion (max deviator stress/deviator stress at 15% strain/max eff. stress/other):": "fail_crit",
-                "Load carried by filter paper strips (kN/mm):": "load_filt_paper",
-                "Specimen perimeter covered by filter paper (mm):": "filt_paper_cov",
-                "Young's modulus of membrane material (kPa):": "young_mod_mem",
-                "Time of Test:": "test_time",
-                "Date of Test:": "test_date",
-                "Start of Repeated Data:": "start_rep_data"
-            }
+            db_manager = DatabaseManager()
+            metadados_completos = {}
 
-            metadados_valores = {}
-            for chave_original, chave_interna in metadados_definidos.items():
-                if chave_original in metadados:
-                    metadados_valores[chave_interna] = metadados[chave_original]
+            # Obter o mapa completo de metadados para abreviação
+            metadados_map = db_manager.get_metadados_map()  # {metadado_completo: abreviacao}
 
-            # Definir valores padrão usando as chaves internas, se não existirem nos metadados
-            metadados_valores.setdefault("B", "5")
-            metadados_valores.setdefault("Adensamento", "7")
-            metadados_valores.setdefault("Cisalhamento", "8")
-            metadados_valores.setdefault("w_0", "0.1375")
-            metadados_valores.setdefault("w_f", "0.2223")
+            # Iterar sobre os metadados lidos do arquivo e mapear para abreviação
+            for metadado_completo, valor in metadados.items():
+                if metadado_completo in metadados_map:
+                    abreviacao = metadados_map[metadado_completo]
+                    metadados_completos[abreviacao] = valor
+                else:
+                    # Se o metadado não estiver na tabela metadadostable, pode optar por ignorar ou incluir
+                    # Aqui, vamos incluir com a chave original
+                    metadados_completos[metadado_completo] = valor
 
-            # Adicionar os metadados restantes sem mapeamento
-            for chave, valor in metadados.items():
-                if chave not in metadados_definidos:
-                    metadados_valores[chave] = valor
-
-            return metadados_valores
+            return metadados_completos
 
         except Exception as e:
             print(f"Erro ao processar o estágio dos dados: {e}")
-            return None
-
-# O restante do código permanece inalterado
-
-
-if __name__ == "__main__":
-    directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
-    arquivos = os.listdir(directory)
-    for arquivo in arquivos:
-        if arquivo.endswith('.gds'):
-            # Processar o arquivo para obter os metadados
-            processor = FileProcessor(directory)
-            gds_file_path = os.path.join(directory, arquivo)
-            metadados = processor.process_gds_file(gds_file_path)
-            if metadados:
-                # Processar os dados de estágio com os metadados
-                metadados_processados = StageProcessor.process_stage_data(directory, gds_file_path, metadados)
-                # Exibir os metadados processados
-                print(f"Metadados processados para o arquivo '{arquivo}':")
-                for chave, valor in metadados_processados.items():
-                    print(f"{chave}: {valor}")
-                print("\n")
-            else:
-                print(f"Erro ao processar o arquivo '{arquivo}'.")
+            return metadados
