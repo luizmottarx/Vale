@@ -26,14 +26,13 @@ class StageProcessor:
             # Obter o mapa completo de metadados para abreviação
             metadados_map = db_manager.get_metadados_map()  # {metadado_completo: abreviacao}
 
-            # Iterar sobre os metadados lidos do arquivo e mapear para abreviação
+            # Iterar sobre os metadados lidos e mapear para abreviações
             for metadado_completo, valor in metadados.items():
-                if metadado_completo in metadados_map:
-                    abreviacao = metadados_map[metadado_completo]
+                abreviacao = metadados_map.get(metadado_completo)
+                if abreviacao:
                     metadados_completos[abreviacao] = valor
                 else:
-                    # Se o metadado não estiver na tabela metadadostable, pode optar por ignorar ou incluir
-                    # Aqui, vamos incluir com a chave original
+                    # Se não houver mapeamento, manter a chave original
                     metadados_completos[metadado_completo] = valor
 
             return metadados_completos
