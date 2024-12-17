@@ -176,3 +176,4 @@ preciso retirar os valores dos seguintes metadados específicados que vão ser d
 
 
 alguns metadados nao estao relacionando com a tabela do banco de dados o nome original / abreviação que foi ultilizada no codigo para fazer os calculos
+metadados
