@@ -177,3 +177,144 @@ preciso retirar os valores dos seguintes metadados específicados que vão ser d
 
 alguns metadados nao estao relacionando com a tabela do banco de dados o nome original / abreviação que foi ultilizada no codigo para fazer os calculos
 metadados
+
+remodelagem do banco de dados:
+retire a lógica de nome e abreviação dos metadados, na interface mostre para o usuário o mesmo nome dos metadados que vao precisar ser editáveis 
+
+NOVA MODELAGEM BANCO DE DADOS
+-tabela fixa: Metadadostable
+idmetadados (coluna de índice, coluna de id)
+metadados (pré-definidos no código) 
+
+-tabela fixa: TipoEnsaio
+idtipoensaio (coluna de índice, coluna de id)
+tipo (pré-definidos no código)
+
+
+-tabela: Contrato
+idcontrato = valor do metadado "Job reference:"
+
+-tabela: Campanha
+idcontrato = valor do metadado "Job reference:"
+idcampanha = valor do metadado "Borehole:"
+
+-tabela: Amostra
+idcontrato = valor do metadado "Job reference:"
+idcampanha = valor do metadado "Borehole:"
+idamostra = valor do metadado "Sample Name:"
+
+-tabela: Ensaio
+idcontrato = valor do metadado "Job reference:"
+idcampanha = valor do metadado "Borehole:"
+idamostra = valor do metadado "Sample Name:"
+idtipoensaio = valor do metadado "Description of Sample:", portanto preciso separar dois valores dentro desse metadado, exemplo: "Description of Sample:","15S02", o valor de idtipoensaio vai ser igual a 15 sempre antes do S ou s do valor lido, esse valor 15 tem que ser relacionado com a tabela TipoEnsaio na coluna idtipoensaio para relacionar qual tipo da coluna tipo dessa tabela corresponde
+idensaio coluna de índice, coluna de id
+
+
+-tabela: Compactacao 
+idensaio (coluna de índice,coluna id da tabela Ensaio)
+idcompactacao (coluna de índice,coluna id)
+
+
+-tabela: Cp
+idcontrato = valor do metadado "Job reference:"
+idcampanha = valor do metadado "Borehole:"
+idamostra = valor do metadado "Sample Name:"
+idtipoensaio = valor do metadado "Description of Sample:", portanto preciso separar dois valores dentro desse metadado, exemplo: "Description of Sample:","15S02", o valor de idtipoensaio vai ser igual a 15 sempre antes do S ou s do valor lido, esse valor 15 tem que ser relacionado com a tabela TipoEnsaio na coluna idtipoensaio para relacionar qual tipo da coluna tipo dessa tabela corresponde
+idensaio coluna de índice, coluna de id
+sequencial = valor do metadado "Description of Sample:", portanto preciso separar dois valores dentro desse metadado, exemplo: "Description of Sample:","15S02", o valor de sequencial vai ser igual a 02 sempre depois do S ou s do valor lido.
+cp = valor do metadado "Test Number:", portanto preciso separar dois valores dentro desse metadado, exemplo: "Test Number:","AR0", o valor de cp é igual a A, sempre antes do R ou r do valor lido
+repeticao = valor do metadado "Test Number:", portanto preciso separar dois valores dentro desse metadado, exemplo: "Test Number:","AR0", o valor de cp é igual a 0, sempre depois do R ou r do valor lido
+nome = nome concatenado de idcontrato, idcampanha, idamostra, idtipoensaio, idensaio, sequencial, cp e repeticao separados por _ 
+idnome = coluna de índice, coluna de id 
+status =sendo status, que pode ser 'Aprovado', 'Refugado' ou 'NV', vai ser atualizado apartir da interface com o usuario
+
+
+-tabela: GranulometriaA
+idensaio
+idga =coluna de índice, coluna de id
+
+-tabela: GranulometriaCP
+idnome
+idgcp = coluna de índice, coluna de id
+
+
+-tabela: MetadadosArquivo
+(ao invés de ser uma lista com os valores em uma coluna só, quero os valores na linha e todos os metadados em colunas)
+coluna:         ( "_B"),
+            ( "_ad"),
+            ( "_cis"),
+            ( "w_0"),
+            ( "w_f"),
+             "h_init"),
+             "d_init"),
+            "ram_diam"),
+             "spec_grav"),
+             "idcontrato"),
+             "idcampanha"),
+             "idamostra"),
+           "depth"),
+             "samp_date"),
+             "tipo"),
+             "init_mass"),
+            "init_dry_mass"),
+             "spec_grav_assmeas"),
+             "date_test_started"),
+             "date_test_finished"),
+             "spec_type"),
+             "top_drain"),
+             "base_drain"),
+             "side_drains"),
+            "fin_mass"),
+            "fin_dry_mass"),
+             "mach_no"),
+           , "press_sys"),
+            "cell_no"),
+            "ring_no"),
+             "job_loc"),
+             "mem_thick"),
+            "sequencial"),
+            "tech_name"),
+           "liq_lim"),
+         "plas_lim"),
+             "avg_wc_trim"),
+            , "notes"),
+          , "mass_no4"),
+             "mass_no10"),
+            , "mass_no40"),
+             "mass_no200"),
+ "mass_silt"),
+             "mass_clay"),
+             "mass_coll"),
+             "trim_proc"),
+            "moist_cond"),
+             "ax_stress_inund"),
+            "water_desc"),
+            "test_meth"),
+          "interp_cv"),
+       "astm_dep"),
+            "wc_obt"),
+            "sat_meth"),
+             "post_consol_area"),
+             "fail_crit"),
+             "load_filt_paper"),
+             "filt_paper_cov"),
+             "young_mod_mem"),
+            "test_time"),
+           "test_date"),
+            "start_rep_data"),
+             "dry_unit_weight"),
+            ( "init_void_ratio"),
+            ("init_sat"),
+            ("post_cons_void")
+        ]
+coluna: idnome = coluna da tabela Cp
+linha: valormetadados = valores lidos dos metadados do arquivo
+
+
+-tabela: EnsaiosTriaxiais
+idnome = coluna da tabela Cp
+[
+	todas as columns_to_save
+	]
+
