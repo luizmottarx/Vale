@@ -1,7 +1,5 @@
 # teste2.py
 
-import os
-from teste1 import FileProcessor
 from testeBD import DatabaseManager
 
 class StageProcessor:
@@ -17,7 +15,7 @@ class StageProcessor:
             metadados (dict): Dicionário de metadados lidos do arquivo.
 
         Returns:
-            dict: Dicionário de metadados completos sem alteração nas chaves.
+            dict: Dicionário de metadados completos com abreviações.
         """
         try:
             db_manager = DatabaseManager()
