@@ -39,10 +39,7 @@ class METADADOS_PARTE2:
         self.vol_solid = vol_solid
         self.v_w_f = v_w_f
 
-        self.init_diameter = self.d_init
-        self.init_height = self.h_init
-
-        denominator = ((((self.init_diameter / 10) ** 2) * np.pi) / 4) * (self.init_height / 10)
+        denominator = ((((self.d_init / 10) ** 2) * np.pi) / 4) * (self.h_init / 10)
         self.dry_unit_weight = self.init_dry_mass / denominator if denominator != 0 else 0
 
         self.init_void_ratio = (self.v_0 - self.vol_solid) / self.vol_solid if self.vol_solid != 0 else 0
