@@ -242,7 +242,7 @@ idgcp = coluna de índice, coluna de id
 -tabela: MetadadosArquivo
 (ao invés de ser uma lista com os valores em uma coluna só, quero os valores na linha e todos os metadados em colunas)
 coluna:        
-idnome
+idnome coluna
 _B
 _ad
 _cis
