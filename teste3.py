@@ -135,6 +135,12 @@ class METADADOS_PARTE2:
             print(f"{attr}: {value}")
         print("==========================================================================\n")
 
+    def get_all_attributes(self):
+        """
+        Retorna todas as variáveis calculadas como um dicionário.
+        """
+        return vars(self)
+
 class CisalhamentoData:
     def __init__(self, df, metadados):
         self.Cisalhamento_stage = int(metadados.get("Cisalhamento", 8))
@@ -183,9 +189,7 @@ class CisalhamentoData:
             "m_A": self.m_A,
             "m_B": self.m_B
         }
-
 class TableProcessor:
-    @staticmethod
     def process_table_data(db_manager, metadados, gds_file):
         try:
             df = pd.read_csv(gds_file, encoding='latin-1', skiprows=57)
@@ -423,10 +427,19 @@ class TableProcessor:
             metadados['init_sat'] = metadados_parte2.init_sat
             metadados['post_cons_void'] = metadados_parte2.post_cons_void
 
+            # Adicionar todas as outras variáveis calculadas
+            all_attributes = metadados_parte2.get_all_attributes()
+            already_assigned = {'dry_unit_weight', 'init_void_ratio', 'init_sat', 'post_cons_void'}
+
+            for attr, value in all_attributes.items():
+                if attr not in already_assigned:
+                    metadados[attr] = value
+
             metadados_parte2.print_attributes()
 
             return {'df': df_to_save, 'metadados_parte2': metadados_parte2}
 
         except Exception as e:
             print(f"Erro ao processar o arquivo '{gds_file}': {e}")
+            #traceback.print_exc()
             return None
