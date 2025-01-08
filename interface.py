@@ -1,6 +1,5 @@
 # interface.py
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import tkinter as tk
 from tkinter import messagebox, filedialog
 import sqlite3
@@ -10,194 +9,15 @@ import sys
 import matplotlib.pyplot as plt
 from teste1 import FileProcessor
 from teste2 import StageProcessor
-from teste3 import TableProcessor, CisalhamentoData
+from teste3 import TableProcessor, CisalhamentoData # Certifique-se de que o nome do arquivo está correto
 import mplcursors
 import random
 import numpy as np
 import pandas as pd
-
-class DatabaseManager:
-    def __init__(self, db_name='C:/Users/lgv_v/Documents/LUIZ/Laboratorio_Geotecnia.db'):
-        self.conn = sqlite3.connect(db_name)
-        self.create_tables()
-
-    def create_tables(self):
-        with self.conn:
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS usuarios (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    login TEXT UNIQUE NOT NULL,
-                    senha TEXT NOT NULL
-                )
-            """)
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS TipoEnsaio (
-                    id_tipo INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tipo TEXT UNIQUE
-                )
-            """)
-            # Tabela Amostra
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS Amostra (
-                    id_amostra INTEGER PRIMARY KEY AUTOINCREMENT,
-                    amostra TEXT UNIQUE,
-                    statusAmostra TEXT DEFAULT 'NV'  
-                )
-            """)
-            # Tabela Ensaio
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS Ensaio (
-                    id_ensaio INTEGER PRIMARY KEY AUTOINCREMENT,
-                    id_tipo INTEGER,
-                    id_amostra INTEGER,
-                    NomeCompleto TEXT UNIQUE,
-                    ensaio TEXT,
-                    statusIndividual TEXT DEFAULT 'NV', 
-                    FOREIGN KEY (id_tipo) REFERENCES TipoEnsaio(id_tipo),
-                    FOREIGN KEY (id_amostra) REFERENCES Amostra(id_amostra)
-                )
-            """)
-
-    def add_user(self, login, senha):
-        with self.conn:
-            try:
-                self.conn.execute("INSERT INTO usuarios (login, senha) VALUES (?, ?)", (login, senha))
-                messagebox.showinfo("Sucesso", f"Usuário '{login}' adicionado com sucesso!")
-            except sqlite3.IntegrityError:
-                messagebox.showerror("Erro", f"Usuário '{login}' já existe.")
-
-    def get_all_users(self):
-        cursor = self.conn.execute("SELECT login FROM usuarios")
-        return [row[0] for row in cursor.fetchall()]
-    
-    def get_data_for_files(self, files):
-        placeholders = ', '.join('?' for _ in files)
-        query = f"""
-            SELECT et.*, e.NomeCompleto
-            FROM EnsaiosTriaxiais et
-            JOIN Ensaio e ON et.id_ensaio = e.id_ensaio
-            WHERE e.NomeCompleto IN ({placeholders}) AND e.statusIndividual != 'Refugado'
-        """
-        cursor = self.conn.execute(query, files)
-        columns = [description[0] for description in cursor.description]
-        data = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        return data
-
-
-    def get_status_individual(self, nome_completo):
-        cursor = self.conn.execute("SELECT statusIndividual FROM Ensaio WHERE NomeCompleto = ?", (nome_completo,))
-        row = cursor.fetchone()
-        if row:
-            return row[0]
-        else:
-            return None
-
-
-    def get_tipo_ensaio_by_amostra(self, amostra):
-        cursor = self.conn.execute("""
-            SELECT DISTINCT te.tipo
-            FROM Ensaio e
-            JOIN Amostra a ON e.id_amostra = a.id_amostra
-            JOIN TipoEnsaio te ON e.id_tipo = te.id_tipo
-            WHERE a.amostra = ?
-        """, (amostra,))
-        return [row[0] for row in cursor.fetchall()]
-
-    def delete_user(self, login):
-        with self.conn:
-            self.conn.execute("DELETE FROM usuarios WHERE login = ?", (login,))
-            messagebox.showinfo("Sucesso", f"Usuário '{login}' foi excluído com sucesso.")
-
-    def get_amostras(self):
-        cursor = self.conn.execute("SELECT amostra FROM Amostra")
-        return [row[0] for row in cursor.fetchall()]
-
-    def get_ensaios_by_amostra(self, amostra, status_individual=None, exclude_status=None, tipo_ensaio=None):
-        cursor = self.conn.execute("SELECT id_amostra FROM Amostra WHERE amostra = ?", (amostra,))
-        row = cursor.fetchone()
-        if row:
-            id_amostra = row[0]
-            query = "SELECT e.NomeCompleto FROM Ensaio e"
-            params = []
-            if tipo_ensaio:
-                query += " JOIN TipoEnsaio te ON e.id_tipo = te.id_tipo WHERE e.id_amostra = ? AND te.tipo = ?"
-                params.extend([id_amostra, tipo_ensaio])
-            else:
-                query += " WHERE e.id_amostra = ?"
-                params.append(id_amostra)
-            if status_individual:
-                query += " AND e.statusIndividual = ?"
-                params.append(status_individual)
-            elif exclude_status:
-                query += " AND e.statusIndividual != ?"
-                params.append(exclude_status)
-            cursor = self.conn.execute(query, params)
-            return [row[0] for row in cursor.fetchall()]
-        else:
-            return []
-
-
-    def update_status_amostra(self, amostra, status):
-        with self.conn:
-            self.conn.execute("UPDATE Amostra SET statusAmostra = ? WHERE amostra = ?", (status, amostra))
-            self.conn.commit()
-            messagebox.showinfo("Status Atualizado", f"O status da amostra '{amostra}' foi alterado para '{status}'.")
-
-    def update_status_individual(self, arquivo, status):
-        with self.conn:
-            cursor = self.conn.execute(
-                "UPDATE Ensaio SET statusIndividual = ? WHERE NomeCompleto = ?",
-                (status, arquivo)
-            )
-            self.conn.commit()
-
-            # Adicionar uma verificação para garantir que a atualização foi feita
-            if cursor.rowcount == 0:
-                messagebox.showerror("Erro", "Falha ao atualizar o status. Verifique se o arquivo existe.")
-            else:
-                messagebox.showinfo("Status Atualizado", f"O status do arquivo '{arquivo}' foi alterado para '{status}'.")
-
-
-    def get_arquivos_by_status_individual(self, status):
-        cursor = self.conn.execute("SELECT NomeCompleto FROM Ensaio WHERE statusIndividual = ?", (status,))
-        return [row[0] for row in cursor.fetchall()]
-    
-
-    def get_data_for_amostra(self, amostra):
-        cursor = self.conn.execute("""
-            SELECT et.*, e.NomeCompleto
-            FROM EnsaiosTriaxiais et
-            JOIN Ensaio e ON et.id_ensaio = e.id_ensaio
-            JOIN Amostra a ON e.id_amostra = a.id_amostra
-            WHERE a.amostra = ? AND e.statusIndividual != 'Refugado'
-        """, (amostra,))
-        columns = [description[0] for description in cursor.description]
-        data = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        return data
-
-
-    def get_data_for_file(self, nome_completo):
-        cursor = self.conn.execute("""
-            SELECT et.*
-            FROM EnsaiosTriaxiais et
-            JOIN Ensaio e ON et.id_ensaio = e.id_ensaio
-            WHERE e.NomeCompleto = ?
-        """, (nome_completo,))
-        columns = [description[0] for description in cursor.description]
-        data = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        return data
-
-    def get_metadata_for_file(self, nome_completo):
-        cursor = self.conn.execute("""
-            SELECT m.metadados, ma.valor_metadados
-            FROM MetadadosArquivo ma
-            JOIN Metadados m ON ma.id_metadados = m.id_metadados
-            WHERE ma.NomeCompleto = ?
-        """, (nome_completo,))
-        return cursor.fetchall()
-
-    def close(self):
-        self.conn.close()
+from testeBD import DatabaseManager  # Importar a classe DatabaseManager de testeBD.py
+import re
+import traceback
+import PreencherExcel
 
 class InterfaceApp:
     def _rgb_to_hex(self, rgb):
@@ -386,10 +206,10 @@ class InterfaceApp:
             self.create_main_menu()
             return
 
-        cursor = self.db_manager.conn.cursor()
-        cursor.execute("SELECT NomeCompleto FROM Ensaio")
-        arquivos_salvos = {row[0] for row in cursor.fetchall()}
+        # Buscar no banco de dados quais filenames já estão salvos
+        arquivos_salvos = self.db_manager.get_existing_filenames()
 
+        # Filtrar os arquivos que não estão salvos no banco
         arquivos_nao_salvos = [f for f in all_files if f not in arquivos_salvos]
 
         if not arquivos_nao_salvos:
@@ -412,62 +232,294 @@ class InterfaceApp:
         tk.Button(button_frame, text="Voltar", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
 
     def select_file(self):
+        """
+        Fluxo principal ao clicar em "Avançar" depois de listar os arquivos .gds:
+        1) Seleciona o arquivo e obtém seu caminho completo.
+        2) Lê os metadados do arquivo (FileProcessor).
+        3) Mescla (opcional) com metadados fixos do DB.
+        4) Garante que Job reference:/Borehole:/Sample Name:/Description of Sample:/Test Number: não fiquem vazios.
+        5) Extrai idtipoensaio e sequencial de "Description of Sample:".
+        6) Extrai cp e repeticao de "Test Number:".
+        7) Unifica chaves duplicadas e filtra colunas (self.unify_metadados_keys).
+        8) Mostra a tela de edição (show_metadata_selection_screen).
+        """
         selection = self.file_listbox.curselection()
-        if selection:
-            index = selection[0]
-            self.selected_file = self.file_listbox.get(index)
-            directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
-            file_path = os.path.join(directory, self.selected_file)
-
-            processor = FileProcessor(directory)
-            try:
-                self.metadados = processor.process_gds_file(file_path)
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao processar o arquivo: {e}")
-                self.create_main_menu()
-                return
-
-            if self.metadados:
-                try:
-                    self.metadados = StageProcessor.process_stage_data(directory, file_path, self.metadados)
-                except Exception as e:
-                    messagebox.showerror("Erro", f"Erro ao processar dados de estágio: {e}")
-                    self.create_main_menu()
-                    return
-                self.show_metadata_selection_screen()
-            else:
-                messagebox.showerror("Erro", "Falha ao processar o arquivo.")
-                self.create_main_menu()
-        else:
+        if not selection:
             messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
+            return
 
-    # Fluxo Editar Metadados (Encontrar Arquivos)
-    def show_metadata_selection_screen(self):
-        self.clear_screen()
-        self.root.title("Seleção de Metadados")
+        index = selection[0]
+        self.selected_file = self.file_listbox.get(index)
+        directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
+        file_path = os.path.join(directory, self.selected_file)
+        self.file_path = file_path
 
-        frame = tk.Frame(self.root)
-        frame.pack(pady=20)
+        processor = FileProcessor(directory)
+        try:
+            # 1) Lê metadados do arquivo .gds
+            self.metadados = processor.process_gds_file(file_path)
 
-        tk.Label(frame, text="Selecione um metadado para editar:").pack(pady=10)
+            # 2) (Opcional) Mescla com metadados fixos do DB
+            self.fixed_metadados = self.db_manager.get_fixed_metadados(self.selected_file)
+            if self.fixed_metadados:
+                for k, v in self.fixed_metadados.items():
+                    # só preenche se estiver vazio
+                    if k not in self.metadados or not self.metadados[k]:
+                        self.metadados[k] = v
 
-        self.metadata_list = tk.Listbox(frame, height=15, width=80)
+            # 3) Garante chaves básicas
+            if "idcontrato" in self.metadados and not self.metadados.get("Job reference:"):
+                self.metadados["Job reference:"] = self.metadados["idcontrato"]
+            if "idcampanha" in self.metadados and not self.metadados.get("Borehole:"):
+                self.metadados["Borehole:"] = self.metadados["idcampanha"]
+            if "idamostra" in self.metadados and not self.metadados.get("Sample Name:"):
+                self.metadados["Sample Name:"] = self.metadados["idamostra"]
+            if "tipo" in self.metadados and not self.metadados.get("Description of Sample:"):
+                self.metadados["Description of Sample:"] = self.metadados["tipo"]
+            if "test_number" in self.metadados and not self.metadados.get("Test Number:"):
+                self.metadados["Test Number:"] = self.metadados["test_number"]
+
+            # 4) Extrai idtipoensaio e sequencial de "Description of Sample:"
+            desc_value = self.metadados.get("Description of Sample:", "").strip()
+            # Ajustar regex para permitir qualquer quantidade de espaços e considerar letras minúsculas
+            match_desc = re.match(r"(\d+)[Ss](\d+)", desc_value)
+            if match_desc:
+                self.metadados["idtipoensaio"] = int(match_desc.group(1))  # Converter para int
+                self.metadados["sequencial"]   = int(match_desc.group(2))  # Converter para int
+            else:
+                # Tratar caso não corresponda
+                self.metadados["idtipoensaio"] = 0
+                self.metadados["sequencial"]   = 0
+
+            # 5) Extrai cp e repeticao de "Test Number:"
+            test_value = self.metadados.get("Test Number:", "").strip()
+            # Ajustar regex para capturar letras e números corretamente
+            match_test = re.match(r"([A-Za-z]+)[Rr]?(\d+)", test_value)
+            if match_test:
+                self.metadados["cp"]         = match_test.group(1)[0].upper()  # Pega apenas a primeira letra e converte para maiúscula
+                self.metadados["repeticao"]  = int(match_test.group(2))  # Converter para int
+            else:
+                self.metadados["cp"]         = None
+                self.metadados["repeticao"]  = None
+
+            # 6) Unifica chaves duplicadas e filtra apenas colunas que serão salvas
+            self.unify_metadados_keys()
+
+            # 7) Se ainda estiver vazio, aborta
+            if not self.metadados:
+                raise ValueError("Nenhum metadado encontrado no arquivo.")
+
+            # 8) Exibe a tela de edição de metadados
+            self.show_metadata_selection_screen()
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao processar o arquivo: {e}")
+            self.create_main_menu()
+
+
+    def unify_metadados_keys(self):
+
+        desired_order = ["_B", "_ad", "_cis", "w_0", "w_f", "idcontrato", "idcampanha", "idamostra", "idtipoensaio", "sequencial", "cp", "repeticao"]
+
+        possible_aliases = {
+            # Mantemos os alias sublinhados
+            "B": "_B",
+            "Adensamento": "_ad",
+            "Cisalhamento": "_cis",
+            "Volume de umidade médio INICIAL": "w_0",
+            "Volume de umidade médio FINAL": "w_f",
+            "Initial Height (mm)": "h_init",
+            "Initial Diameter (mm)": "d_init",
+            "Ram Diameter": "ram_diam",
+            "Specific Gravity (kN/m³):": "spec_grav",
+            "Job reference:": "idcontrato",
+            "Borehole:": "idcampanha",
+            "Sample Name:": "idamostra",
+            "Depth:": "depth",
+            "Sample Date (dd/mm/yyyy):": "samp_date",
+            "Description of Sample:": "tipo",
+            "Initial mass (g):": "init_mass",
+            "Initial dry mass (g):": "init_dry_mass",
+            "Specific Gravity (ass/meas):": "spec_grav_assmeas",
+            "Date Test Started:": "date_test_started",
+            "Date Test Finished:": "date_test_finished",
+            "Specimen Type (dis/undis):": "spec_type",
+            "Top Drain Used (y/n):": "top_drain",
+            "Base Drain Used (y/n):": "base_drain",
+            "Side Drains Used (y/n):": "side_drains",
+            "Final Mass:": "fin_mass",
+            "Final Dry Mass:": "fin_dry_mass",
+            "Machine No.:": "mach_no",
+            "Pressure System:": "press_sys",
+            "Cell No.:": "cell_no",
+            "Ring No.:": "ring_no",
+            "Job Location:": "job_loc",
+            "Membrane Thickness (mm):": "mem_thick",
+            "Test Number:": "test_number",
+            "Technician Name:": "tech_name",
+            "Sample Liquid Limit (%):": "liq_lim",
+            "Sample Plastic Limit (%):": "plas_lim",
+            "Average Water Content of Sample Trimmings (%):": "avg_wc_trim",
+            "Additional Notes (info source or occurrence and size of large particles etc.):": "notes",
+            "% by mass of Sample retained on No. 4 sieve (Gravel):": "mass_no4",
+            "% by mass of Sample retained on No. 10 sieve (Coarse Sand):": "mass_no10",
+            "% by mass of Sample retained on No. 40 sieve (Medium Sand):": "mass_no40",
+            "% by mass of Sample retained on No. 200 sieve (Fine Sand):": "mass_no200",
+            "% by mass of Sample Silt (0.074 to 0.005 mm):": "mass_silt",
+            "% by mass of Sample Clay (smaller than 0.005 mm):": "mass_clay",
+            "% by mass of Sample Colloids (smaller than 0.001 mm):": "mass_coll",
+            "Trimming Procedure (turntable/cutting shoe/direct test/ring lined sampler):": "trim_proc",
+            "Moisture Condition (natural moisture/inundated):": "moist_cond",
+            "Axial Stress at Inundation (kPa):": "ax_stress_inund",
+            "Description of Water Used:": "water_desc",
+            "Test Method (A/B):": "test_meth",
+            "Interpretation Procedure for Cv (1/2/Both):": "interp_cv",
+            "All Departures from Outlined ASTM D2435/D2435M-11 Procedure:": "astm_dep",
+            "Specify how the water content was obtained (cuttings/entire specimen):": "wc_obt",
+            "Specify method for specimen saturation (dry method/wet method):": "sat_meth",
+            "Specify method to determine post_consolidation specimen area (A/B/A and B):": "post_consol_area",
+            "Specify failure criterion (max deviator stress/deviator stress at 15% strain/max eff. stress/other:": "fail_crit",
+            "Load carried by filter paper strips (kN/mm):": "load_filt_paper",
+            "Specimen perimeter covered by filter paper (mm):": "filt_paper_cov",
+            "Young's modulus of membrane material (kPa):": "young_mod_mem",
+            "Time of Test": "test_time",
+            "Date of Test": "test_date",
+            "Start of Repeated Data": "start_rep_data",
+            "dry_unit_weight": "dry_unit_weight",
+            "init_void_ratio": "init_void_ratio",
+            "init_sat": "init_sat",
+            "post_cons_void": "post_cons_void",
+            "final_moisture": "final_moisture",
+            "Saturacao_c": "Saturacao_c",
+            "v_0": "v_0",
+            "vol_solid": "vol_solid",
+            "v_w_f": "v_w_f",
+            "ax_disp_0": "ax_disp_0",
+            "back_vol_0": "back_vol_0",
+            "back_press_0": "back_press_0",
+            "rad_press_0": "rad_press_0",
+            "pore_press_0": "pore_press_0",
+            "ax_disp_c": "ax_disp_c",
+            "back_vol_c": "back_vol_c",
+            "h_init_c": "h_init_c",
+            "back_vol_f": "back_vol_f",
+            "v_c_A": "v_c_A",
+            "cons_void_vol": "cons_void_vol",
+            "v_c_B": "v_c_B",
+            "w_c_A": "w_c_A",
+            "w_c_B": "w_c_B",
+            "void_ratio_c": "void_ratio_c",
+            "void_ratio_f": "void_ratio_f",
+            "void_ratio_m": "void_ratio_m",
+            "vol_change_c": "vol_change_c",
+            "vol_change_f_c": "vol_change_f_c",
+            "final_void_vol": "final_void_vol",
+            "consolidated_area": "consolidated_area",
+            "camb_p_A0": "camb_p_A0",
+            "camb_p_B0": "camb_p_B0"
+        }
+
+        # 1) Renomeia as chaves com alias
+        for old_key, new_key in possible_aliases.items():
+            if old_key in self.metadados:
+                # Se new_key estiver vazio, substitui
+                if new_key not in self.metadados or not self.metadados[new_key]:
+                    self.metadados[new_key] = self.metadados[old_key]
+                del self.metadados[old_key]
+
+        # 2) Lista das colunas que realmente queremos guardar em MetadadosArquivo,
+        # já *sem* B, Adensamento, Cisalhamento (sem underline).
+        metadadosarquivo_cols = [
+            "idnome", "_B", "_ad", "_cis",
+            "w_0", "w_f", "h_init", "d_init", "ram_diam", "spec_grav",
+            "idcontrato", "idcampanha", "idamostra","idtipoensaio", "depth", "samp_date", "tipo",
+            "init_mass", "init_dry_mass", "spec_grav_assmeas",
+            "date_test_started", "date_test_finished", "spec_type",
+            "top_drain", "base_drain", "side_drains", "fin_mass", "fin_dry_mass",
+            "mach_no", "press_sys", "cell_no", "ring_no", "job_loc", "mem_thick",
+            "sequencial", "tech_name", "liq_lim", "plas_lim", "avg_wc_trim", "notes",
+            "mass_no4", "mass_no10", "mass_no40", "mass_no200", "mass_silt",
+            "mass_clay", "mass_coll", "trim_proc", "moist_cond", "ax_stress_inund",
+            "water_desc", "test_meth", "interp_cv", "astm_dep", "wc_obt",
+            "sat_meth", "post_consol_area", "fail_crit", "load_filt_paper",
+            "filt_paper_cov", "young_mod_mem", "test_time", "test_date",
+            "start_rep_data", "dry_unit_weight", "init_void_ratio", "init_sat",
+            "post_cons_void", "final_moisture", "Saturacao_c", "v_0", "vol_solid",
+            "v_w_f", "ax_disp_0", "back_vol_0", "back_press_0", "rad_press_0",
+            "pore_press_0", "ax_disp_c", "back_vol_c", "h_init_c", "back_vol_f",
+            "v_c_A", "cons_void_vol", "v_c_B", "w_c_A", "w_c_B", "void_ratio_c",
+            "void_ratio_f", "void_ratio_m", "vol_change_c", "vol_change_f_c",
+            "final_void_vol", "consolidated_area", "camb_p_A0", "camb_p_B0"
+        ]
+
+        # 3) Ordena os metadados conforme desired_order e adiciona os restantes
+        ordered_metadata = []
+        remaining_metadata = []
+
         for key, value in self.metadados.items():
-            self.metadata_list.insert(tk.END, f"{key}: {value}")
-        self.metadata_list.pack(fill="both", expand=True)
+            if key in desired_order:
+                ordered_metadata.append((key, value))
+            else:
+                remaining_metadata.append((key, value))
 
-        button_frame = tk.Frame(frame)
-        button_frame.pack(pady=10)
+        # Mantém a ordem desejada primeiro
+        self.metadata_items = ordered_metadata + remaining_metadata
 
-        tk.Button(button_frame, text="Editar", command=self.edit_selected_metadata, width=20).grid(row=0, column=0, padx=5)
-        tk.Button(button_frame, text="Salvar no Banco", command=self.save_metadata, width=20).grid(row=0, column=1, padx=5)
-        tk.Button(button_frame, text="Voltar", command=self.find_files, width=20).grid(row=0, column=2, padx=5)
-        tk.Button(button_frame, text="Sair", command=self.root.quit, width=20).grid(row=0, column=3, padx=5)
+        # 4) Filtra apenas as colunas que serão salvas
+        final_dict = {}
+        for col in metadadosarquivo_cols:
+            if col in self.metadados:
+                final_dict[col] = self.metadados[col]
+
+        # Se você quiser manter "cp" e "repeticao" no dicionário para posterior uso
+        # (embora não sejam salvos diretamente em MetadadosArquivo),
+        # pode opcionalmente reintroduzi-los:
+        if "cp" in self.metadados:
+            final_dict["cp"] = self.metadados["cp"]
+        if "repeticao" in self.metadados:
+            final_dict["repeticao"] = self.metadados["repeticao"]
+
+        # 5) Substituir self.metadados
+        self.metadados = final_dict
+
+
+    def save_metadata(self):
+        try:
+            result = TableProcessor.process_table_data(self.db_manager, self.metadados, self.file_path)
+            if result is None:
+                raise ValueError("Falha ao processar os dados do arquivo. Verifique se o arquivo está correto.")
+
+            df_to_save = result['df']
+            metadados_parte2 = result['metadados_parte2']
+
+            self.db_manager.save_to_database(self.metadados, df_to_save, filename=os.path.basename(self.file_path))
+
+            # Exibe a messagebox de sucesso
+            messagebox.showinfo("Sucesso", "Metadados salvos com sucesso!")
+
+            # Chama a função para exibir a tela de resultados
+            self.show_save_status()  # Alterado de show_results_screen para show_save_status
+
+        except Exception as e:
+            print(f"Erro ao salvar metadados: {e}")
+            traceback.print_exc()
+            messagebox.showerror("Erro", f"Falha ao salvar os metadados: {e}")
+
+    def alterar_status_arquivo(self, filename, novo_status):
+        try:
+            self.db_manager.update_status_cp(filename, novo_status)
+            messagebox.showinfo("Sucesso", f"Status do arquivo '{filename}' atualizado para '{novo_status}'.")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Não foi possível atualizar o status: {e}")
+            #logging.error(f"Erro ao alterar status do arquivo '{filename}': {e}")
+            traceback.print_exc()
 
     def edit_selected_metadata(self):
-        selected_metadata_text = self.metadata_list.get(tk.ACTIVE)
-        if selected_metadata_text:
-            selected_metadata = selected_metadata_text.split(":")[0].strip()
+        selection = self.metadata_list.curselection()
+        if selection:
+            index = selection[0]
+            selected_metadata, original_value = self.metadata_items[index]
+            # Verifique se o metadado selecionado é "tipo_sequencial"
             self.show_metadata_edit_screen(selected_metadata)
         else:
             messagebox.showerror("Erro", "Nenhum metadado selecionado!")
@@ -481,124 +533,171 @@ class InterfaceApp:
 
         tk.Label(frame, text=f"Editando: {selected_metadata}").pack(pady=10)
 
+        # Valor atual obtido do dicionário self.metadados
+        valor_atual = self.metadados.get(selected_metadata, "")
+
         self.metadata_entry = tk.Entry(frame, width=80)
-        self.metadata_entry.insert(0, self.metadados[selected_metadata])
+        self.metadata_entry.insert(0, valor_atual)
         self.metadata_entry.pack(pady=10)
 
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
-        tk.Button(button_frame, text="Salvar Alterações", command=lambda: self.update_metadata(selected_metadata), width=20).grid(row=0, column=0, padx=5)
+        # Precisamos saber qual metadado está sendo editado para update_metadata
+        # Vamos armazenar em uma variável de instância
+        self.current_editing_metadata = selected_metadata
+
+        tk.Button(button_frame, text="Salvar Alterações",
+                command=self.on_edit_save, width=20).grid(row=0, column=0, padx=5)
         tk.Button(button_frame, text="Voltar", command=self.show_metadata_selection_screen, width=20).grid(row=0, column=1, padx=5)
         tk.Button(button_frame, text="Sair", command=self.root.quit, width=20).grid(row=0, column=2, padx=5)
 
-    def update_metadata(self, selected_metadata):
-        new_value = self.metadata_entry.get()
-        if new_value:
-            self.metadados[selected_metadata] = new_value
-            messagebox.showinfo("Sucesso", f"Metadado '{selected_metadata}' atualizado!")
-            self.show_metadata_selection_screen()
-        else:
-            messagebox.showerror("Erro", "O valor não pode estar vazio!")
-
-    def save_metadata(self):
-        directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
-        file_path = os.path.join(directory, self.selected_file)
-
-        old_stdout = sys.stdout
-        sys.stdout = mystdout = io.StringIO()
-
-        try:
-            self.metadados_parte2 = TableProcessor.process_table_data(self.metadados, file_path)
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao processar dados da tabela: {e}")
-            sys.stdout = old_stdout
-            return
-
-        sys.stdout = old_stdout
-
-        self.terminal_output = mystdout.getvalue()
-
-        self.save_to_database()
-
-        self.show_save_status()
-
-    def save_to_database(self):
-        cursor = self.db_manager.conn.cursor()
-
-        base_nome = os.path.basename(self.selected_file)
-        nome_partes = os.path.splitext(base_nome)[0].split('_')
-
-        if len(nome_partes) >= 4:
-            tipo_ensaio = '_'.join(nome_partes[0:2])  # Junta os dois primeiros elementos
-            amostra = nome_partes[2]                  # Terceiro elemento
-            ensaio = nome_partes[3]                   # Quarto elemento
-        elif len(nome_partes) == 3:
-            tipo_ensaio = nome_partes[0]              # Primeiro elemento
-            amostra = nome_partes[1]                  # Segundo elemento
-            ensaio = nome_partes[2]                   # Terceiro elemento
-        else:
-            tipo_ensaio = 'Desconhecido'
-            amostra = 'Desconhecida'
-            ensaio = 'Desconhecido'
-
-        # Verificar se o NomeCompleto já existe na tabela Ensaio
-        cursor.execute("SELECT NomeCompleto FROM Ensaio WHERE NomeCompleto = ?", (self.selected_file,))
-        ensaio_existente = cursor.fetchone()
-
-        # Se o arquivo já existe, interromper o processo sem exibir pop-up
-        if ensaio_existente:
-            #messagebox.showinfo("Informação", "Este ensaio já está registrado no banco de dados.")
-            return  # Não prosseguir com o salvamento se o arquivo já existe
-
-        try:
-            # Inserir ou recuperar id_amostra
-            cursor.execute("INSERT OR IGNORE INTO Amostra (amostra) VALUES (?)", (amostra,))
-            cursor.execute("SELECT id_amostra FROM Amostra WHERE amostra = ?", (amostra,))
-            id_amostra = cursor.fetchone()[0]
-
-            # Inserir ou recuperar id_tipo
-            cursor.execute("INSERT OR IGNORE INTO TipoEnsaio (tipo) VALUES (?)", (tipo_ensaio,))
-            cursor.execute("SELECT id_tipo FROM TipoEnsaio WHERE tipo = ?", (tipo_ensaio,))
-            id_tipo = cursor.fetchone()[0]
-
-            # Inserir o novo registro no banco de dados
-            cursor.execute("""
-                INSERT INTO Ensaio (id_tipo, id_amostra, NomeCompleto, ensaio)
-                VALUES (?, ?, ?, ?)
-            """, (id_tipo, id_amostra, self.selected_file, ensaio))
-
-            # Commit das alterações
-            self.db_manager.conn.commit()
-        except sqlite3.Error as e:
-            messagebox.showerror("Erro", f"Erro ao salvar no banco de dados: {e}")
-
-    def show_save_status(self):
+    def show_metadata_selection_screen(self):
+        """
+        Exibe uma tela/listbox com os metadados para o usuário editar ou salvar.
+        Esta função deve ser chamada depois de self.metadados ter sido preenchido.
+        """
         self.clear_screen()
-        self.root.title("Status de Salvamento")
+        self.root.title("Edição de Metadados")
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
 
-        tk.Label(frame, text="Dados processados e salvos no banco de dados!").pack(pady=10)
+        tk.Label(frame, text="Edite os metadados abaixo:").pack(pady=10)
 
-        if self.terminal_output:
-            tk.Label(frame, text="Valores dos metadados calculados:").pack(pady=10)
+        # Listbox para exibir os metadados (chave e valor)
+        self.metadata_list = tk.Listbox(frame, height=15, width=100)
+        self.metadata_list.pack(fill="both", expand=True)
 
-            text_widget = tk.Text(frame, height=25, width=80)
-            text_widget.pack(pady=10)
+        # Define a ordem desejada
+        desired_order = ["_B", "_ad", "_cis", "w_0", "w_f", "idcontrato", "idcampanha", "idamostra", "idtipoensaio", "sequencial", "cp", "repeticao"]
 
-            text_widget.insert(tk.END, self.terminal_output)
-            text_widget.config(state=tk.DISABLED)
-        else:
-            tk.Label(frame, text="Não foi possível obter os metadados calculados.").pack(pady=10)
+        # Cria uma lista de pares (chave, valor) ordenados
+        ordered_metadata = []
+        remaining_metadata = []
 
+        for key, value in self.metadados.items():
+            if key in desired_order:
+                ordered_metadata.append((key, value))
+            else:
+                remaining_metadata.append((key, value))
+
+        # Ordena os metadados conforme desired_order
+        self.metadata_items = ordered_metadata + remaining_metadata
+
+        # Limpa e povoa o Listbox
+        self.metadata_list.delete(0, tk.END)
+        for metadado, valor in self.metadata_items:
+            # Insere a string "<chave>: <valor>"
+            self.metadata_list.insert(tk.END, f"{metadado}: {valor}")
+
+        # Botões
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
-        tk.Button(button_frame, text="Ver Gráficos", command=self.show_scatter_plots_wrapper, width=20).grid(row=0, column=0, padx=5)
-        tk.Button(button_frame, text="Voltar ao Menu Principal", command=self.create_main_menu, width=20).grid(row=0, column=1, padx=5)
+        tk.Button(button_frame, text="Editar",
+                command=self.edit_selected_metadata, width=20).grid(row=0, column=0, padx=5)
+        tk.Button(button_frame, text="Salvar no Banco",
+                command=self.save_metadata, width=20).grid(row=0, column=1, padx=5)
+        tk.Button(button_frame, text="Voltar",
+                command=self.find_files, width=20).grid(row=0, column=2, padx=5)
+        tk.Button(button_frame, text="Sair",
+                command=self.root.quit, width=20).grid(row=0, column=3, padx=5)
+
+
+
+    def on_edit_save(self):
+        new_value = self.metadata_entry.get()
+        if new_value:
+            if self.current_editing_metadata in self.metadados:
+                self.metadados[self.current_editing_metadata] = new_value
+                messagebox.showinfo("Sucesso", f"Metadado '{self.current_editing_metadata}' atualizado para '{new_value}'!")
+                self.show_metadata_selection_screen()
+            else:
+                messagebox.showerror("Erro", f"Metadado '{self.current_editing_metadata}' não encontrado.")
+        else:
+            messagebox.showerror("Erro", "O valor não pode estar vazio!")
+
+
+    def get_tipoensaio_id(self, tipo_ensaio):
+        try:
+            return self.db_manager.get_tipoensaio_id(tipo_ensaio)
+        except ValueError as ve:
+            messagebox.showerror("Erro", str(ve))
+            return None
+
+
+    def update_metadata(self, selected_metadata):
+        new_value = self.metadata_entry.get()
+        if new_value:
+            if selected_metadata in self.metadados:
+                self.metadados[selected_metadata] = new_value
+                messagebox.showinfo("Sucesso", f"Metadado '{selected_metadata}' atualizado para '{new_value}'!")
+                self.show_metadata_selection_screen()  # Atualiza a tela de metadados
+            else:
+                messagebox.showerror("Erro", f"Metadado '{selected_metadata}' não encontrado.")
+        else:
+            messagebox.showerror("Erro", "O valor não pode estar vazio!")
+
+    def show_save_status(self):
+        """
+        Exibe uma tela com todos os metadados do arquivo salvo,
+        permitindo ao usuário visualizar e interagir com os dados.
+        """
+        self.clear_screen()
+        self.root.title("Metadados Salvos")
+        
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+        
+        tk.Label(frame, text="Metadados do Arquivo Salvo", font=("Helvetica", 16)).pack(pady=10)
+        
+        try:
+            # Obter o idnome do arquivo salvo
+            idnome = self.db_manager.get_idnome_by_filename(os.path.basename(self.file_path))
+            if not idnome:
+                messagebox.showerror("Erro", "Não foi possível encontrar os metadados para o arquivo salvo.")
+                self.create_main_menu()
+                return
+            
+            # Obter todos os metadados do arquivo salvo
+            metadados = self.db_manager.get_all_metadados_for_idnome(idnome)
+            if not metadados:
+                messagebox.showerror("Erro", "Nenhum metadado encontrado para o arquivo salvo.")
+                self.create_main_menu()
+                return
+            
+            # Exibir os metadados em um widget de texto com scrollbar
+            results_frame = tk.Frame(frame)
+            results_frame.pack(pady=10)
+            
+            scrollbar = tk.Scrollbar(results_frame)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            text_widget = tk.Text(results_frame, height=20, width=100, yscrollcommand=scrollbar.set)
+            text_widget.pack()
+            
+            scrollbar.config(command=text_widget.yview)
+            
+            # Inserir os metadados no widget de texto
+            for key, value in metadados.items():
+                text_widget.insert(tk.END, f"{key}: {value}\n")
+            
+            text_widget.config(state=tk.DISABLED)
+        
+        except Exception as e:
+            messagebox.showerror("Erro", f"Ocorreu um erro ao obter os metadados: {e}")
+            self.create_main_menu()
+            return
+        
+        # Botões
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=10)
+        
+        tk.Button(button_frame, text="Plotar Gráficos", command=lambda: self.plotar_graficos_arquivo(os.path.basename(self.file_path)), width=20).grid(row=0, column=0, padx=5)
+        tk.Button(button_frame, text="Voltar ao Menu Principal", command=self.create_main_menu, width=25).grid(row=0, column=1, padx=5)
         tk.Button(button_frame, text="Sair", command=self.root.quit, width=20).grid(row=0, column=2, padx=5)
+
 
     def show_scatter_plots_wrapper(self):
         if self.selected_file:
@@ -645,6 +744,107 @@ class InterfaceApp:
         tk.Button(button_frame, text="Selecionar Individual", command=self.selecionar_individual_amostra, width=25).grid(row=0, column=1, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=25).grid(row=0, column=2, padx=10)
 
+
+    def avancar_planilha_cliente(self):
+        selection = self.amostra_listbox.curselection()
+        if selection:
+            index = selection[0]
+            amostra_selecionada = self.amostra_listbox.get(index)
+            self.tipo_ensaio_screen_planilha_cliente(amostra_selecionada)
+        else:
+            messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
+
+    def tipo_ensaio_screen_planilha_cliente(self, amostra_selecionada):
+        self.clear_screen()
+        self.root.title("Selecionar Modelo de Planilha")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text="Selecione o modelo de planilha:").pack(pady=10)
+        self.modelo_var = tk.StringVar(value='TIR')  # Valor padrão
+        modelo_frame = tk.Frame(frame)
+        modelo_frame.pack(pady=5)
+        tk.Radiobutton(modelo_frame, text="TIR", variable=self.modelo_var, value='TIR').pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(modelo_frame, text="TER", variable=self.modelo_var, value='TER').pack(side=tk.LEFT, padx=5)
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=10)
+
+        tk.Button(button_frame, text="Avançar", command=lambda: self.selecionar_arquivos_planilha_cliente(amostra_selecionada), width=15).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Voltar", command=self.gerar_planilha_cliente_screen, width=15).pack(side=tk.RIGHT, padx=5)
+
+    def selecionar_arquivos_planilha_cliente(self, amostra_selecionada):
+        self.clear_screen()
+        self.root.title(f"Selecionar Arquivos para Planilha Cliente - {amostra_selecionada}")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text=f"Selecione até 5 arquivos da amostra {amostra_selecionada}:").pack(pady=10)
+        self.planilha_cliente_listbox = tk.Listbox(frame, selectmode=tk.MULTIPLE, width=80, height=10)
+        
+        # Obter arquivos aprovados da amostra
+        arquivos_aprovados = self.db_manager.get_ensaios_by_amostra(
+            amostra_selecionada,
+            status_individual='Aprovado'
+        )
+        for arquivo in arquivos_aprovados:
+            self.planilha_cliente_listbox.insert(tk.END, arquivo)
+        self.planilha_cliente_listbox.pack()
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=10)
+
+        # Passar 'amostra_selecionada' como parâmetro usando lambda
+        tk.Button(button_frame, text="Gerar Planilha", command=lambda: self.metodo_selection_screen_planilha_cliente(amostra_selecionada), width=15).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Voltar", command=lambda: self.tipo_ensaio_screen_planilha_cliente(amostra_selecionada), width=15).pack(side=tk.RIGHT, padx=5)
+
+    def metodo_selection_screen_planilha_cliente(self, amostra_selecionada):
+        selection = self.planilha_cliente_listbox.curselection()
+        if not selection:
+            messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
+            return
+        if len(selection) > 5:
+            messagebox.showerror("Erro", "Selecione no máximo 5 arquivos!")
+            return
+
+        arquivos_selecionados = [self.planilha_cliente_listbox.get(i) for i in selection]
+        tipo_ensaio_selecionado = self.modelo_var.get()
+
+        self.clear_screen()
+        self.root.title("Selecionar Método")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        tk.Label(frame, text="Selecione o Método:").pack(pady=10)
+        self.metodo_planilha_var = tk.StringVar(value='A')  # Valor padrão
+        metodo_frame = tk.Frame(frame)
+        metodo_frame.pack(pady=5)
+        tk.Radiobutton(metodo_frame, text="Método A", variable=self.metodo_planilha_var, value='A').pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(metodo_frame, text="Método B", variable=self.metodo_planilha_var, value='B').pack(side=tk.LEFT, padx=5)
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=10)
+
+        # Passar 'amostra_selecionada' se necessário na função de 'Voltar'
+        tk.Button(button_frame, text="Gerar Planilha", command=lambda: self.chamar_gerar_planilha(arquivos_selecionados, tipo_ensaio_selecionado, self.metodo_planilha_var.get()), width=15).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Voltar", command=lambda: self.selecionar_arquivos_planilha_cliente(amostra_selecionada), width=15).pack(side=tk.RIGHT, padx=5)
+
+
+    def chamar_gerar_planilha(self, arquivos_selecionados, tipo_ensaio_selecionado, metodo):
+        try:
+            from PreencherExcel import gerar_planilha_para_arquivos
+            gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado, metodo)
+            messagebox.showinfo("Sucesso", "Planilha gerada com sucesso!")
+            self.create_main_menu()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
+        finally:
+            self.create_main_menu()
+
+
     def selecionar_individual_amostra(self):
         selection = self.amostra_listbox.curselection()
         if selection:
@@ -688,6 +888,7 @@ class InterfaceApp:
             self.plotar_graficos_arquivo(arquivo_selecionado)
         else:
             messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
+
 
     def update_amostra_list(self):
         search_text = self.search_var.get().strip().lower()
@@ -831,27 +1032,34 @@ class InterfaceApp:
         fig.canvas.draw_idle()
         config_window.destroy()
 
+    def safe_cast_to_int(value, default=0):
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return default
+        
     def plotar_graficos_arquivo(self, arquivo_selecionado):
         try:
             # Obter os dados do arquivo selecionado
             data = self.db_manager.get_data_for_file(arquivo_selecionado)
-            if not data:
-                messagebox.showinfo("Informação", "Nenhum dado encontrado para o arquivo selecionado.")
+            if data is None:
+                messagebox.showerror("Erro", "Não foi possível obter os dados para plotagem.")
                 return
 
             # Obter metadados para o arquivo
             metadados = self.db_manager.get_metadata_for_file(arquivo_selecionado)
             if not metadados:
-                messagebox.showinfo("Informação", "Nenhum metadado encontrado para o arquivo selecionado.")
+                messagebox.showerror("Erro", "Nenhum metadado encontrado para o arquivo selecionado.")
                 return
 
-            # Converter a lista de tuplas em um dicionário
-            metadados_dict = {key: value for key, value in metadados}
-
             # Obter os valores dos estágios dinamicamente dos metadados
-            cisalhamento_stage = int(metadados_dict.get("Cisalhamento", 8))
-            adensamento_stage = int(metadados_dict.get("Adensamento", 7))
-            b_stage = int(metadados_dict.get("B", 5))
+            try:
+                cisalhamento_stage = int(float(metadados.get("Cisalhamento", 8)))
+                adensamento_stage = int(float(metadados.get("Adensamento", 7)))
+                b_stage = int(float(metadados.get("B", 5)))
+            except ValueError as ve:
+                messagebox.showerror("Erro", f"Erro ao converter metadados para inteiros: {ve}")
+                return
 
             # Converter a lista de dicts para DataFrame
             df = pd.DataFrame(data)
@@ -898,7 +1106,7 @@ class InterfaceApp:
                 if i >= len(axs):
                     break
 
-                sc = axs[i].scatter(df_cisalhamento[x_col], df_cisalhamento[y_col], picker=True)
+                sc = axs[i].scatter(df_cisalhamento[x_col], df_cisalhamento[y_col], picker=True, label=arquivo_selecionado)
                 artists.append(sc)
                 axs[i].set_xlabel(x_col)
                 axs[i].set_ylabel(y_col)
@@ -939,17 +1147,10 @@ class InterfaceApp:
             @cursor.connect("add")
             def on_add(sel):
                 x, y = sel.target
-                sel.annotation.set_text(
-                    f"x: {x:.4f}\ny: {y:.4f}"
-                )
-
-            @cursor.connect("remove")
-            def on_remove(sel):
-                sel.annotation.set_visible(False)
-                sel.annotation.figure.canvas.draw_idle()
+                sel.annotation.set_text(f"x: {x:.4f}\ny: {y:.4f}")
 
             def atualizar_status(status):
-                self.db_manager.update_status_individual(arquivo_selecionado, status)
+                self.db_manager.update_status_cp(arquivo_selecionado, status)
                 messagebox.showinfo("Sucesso", f"Status do arquivo '{arquivo_selecionado}' atualizado para '{status}'.")
                 graph_window.destroy()
 
@@ -994,16 +1195,41 @@ class InterfaceApp:
 
         tk.Label(frame, text=f"Metadados do Arquivo {arquivo_selecionado}:").pack(pady=10)
         metadata_text = tk.Text(frame, width=80, height=20)
-        for metadado, valor in metadados:
+        for metadado, valor in metadados.items():
+            # Exibir apenas as abreviações
             metadata_text.insert(tk.END, f"{metadado}: {valor}\n")
         metadata_text.config(state=tk.DISABLED)
         metadata_text.pack()
-        
+
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
         tk.Button(button_frame, text="Ver Gráficos", command=lambda: self.plotar_graficos_arquivo(arquivo_selecionado), width=20).grid(row=0, column=0, padx=5)
         tk.Button(button_frame, text="Sair", command=self.create_main_menu, width=20).grid(row=0, column=1, padx=5)
+
+    def get_data_for_file(self, filename):
+        """
+        Recupera os dados necessários para plotagem com base no filename.
+        Busca na tabela EnsaiosTriaxiais e retorna como DataFrame.
+        """
+        try:
+            idnome = self.db_manager.get_idnome_by_filename(filename)
+            if not idnome:
+                print(f"Arquivo '{filename}' não encontrado na tabela 'Cp'.")
+                return None
+
+            df = self.db_manager.get_ensaios_by_idnome(idnome)
+
+            if df is None or df.empty:
+                print(f"Nenhum dado encontrado para o arquivo '{filename}' (idnome={idnome}).")
+                return None
+
+            return df
+
+        except Exception as e:
+            print(f"Erro ao recuperar dados para '{filename}': {e}")
+            traceback.print_exc()
+            return None
 
     # Funções de Plotagem de Gráficos Unificadas
     def plotar_graficos_amostra(self, amostra_selecionada):
@@ -1029,15 +1255,21 @@ class InterfaceApp:
 
             for arquivo, rows in data_by_file.items():
                 metadados = self.db_manager.get_metadata_for_file(arquivo)
+
+                # Usar valores padrão se os metadados estiverem vazios
                 if not metadados:
+                    metadados_dict = {"Cisalhamento": 8, "Adensamento": 7, "B": 5}
+                else:
+                    metadados_dict = {key: value for key, value in metadados.items()}
+
+                # Conversão segura dos metadados com valores padrão
+                try:
+                    cisalhamento_stage = int(float(metadados_dict.get("Cisalhamento", 8)))
+                    adensamento_stage = int(float(metadados_dict.get("Adensamento", 7)))
+                    b_stage = int(float(metadados_dict.get("B", 5)))
+                except ValueError as ve:
+                    messagebox.showerror("Erro", f"Erro ao converter metadados para inteiros no arquivo '{arquivo}': {ve}")
                     continue
-
-                metadados_dict = {key: value for key, value in metadados}
-
-                # Obter os valores dos estágios dinamicamente dos metadados
-                cisalhamento_stage = int(metadados_dict.get("Cisalhamento", 8))
-                adensamento_stage = int(metadados_dict.get("Adensamento", 7))
-                b_stage = int(metadados_dict.get("B", 5))
 
                 df = pd.DataFrame(rows)
 
@@ -1049,17 +1281,21 @@ class InterfaceApp:
                 for col in numeric_columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-                df_cisalhamento = df[df['stage_no'] == cisalhamento_stage]
+                # Filtrar os dados para o estágio de cisalhamento usando np.isclose
+                df_cisalhamento = df[np.isclose(df['stage_no'], cisalhamento_stage, atol=0.01)]
 
+                # Se não houver dados para o estágio de cisalhamento, adicionar um DataFrame vazio
                 if df_cisalhamento.empty:
-                    continue
-
-                datasets[arquivo] = df_cisalhamento
+                    messagebox.showwarning("Aviso", f"Arquivo '{arquivo}': Nenhum dado encontrado para o estágio de cisalhamento. Será usado um DataFrame vazio.")
+                    datasets[arquivo] = pd.DataFrame(columns=numeric_columns)
+                else:
+                    datasets[arquivo] = df_cisalhamento
 
             if not datasets:
-                messagebox.showinfo("Informação", "Nenhum dado encontrado para os arquivos selecionados no estágio de cisalhamento.")
+                messagebox.showinfo("Informação", "Nenhum dado encontrado para os arquivos selecionados.")
                 return
 
+            # Plotagem dos gráficos
             num_plots = 6
             cols = 3
             rows = num_plots // cols + int(num_plots % cols > 0)
@@ -1072,19 +1308,18 @@ class InterfaceApp:
             plots = [
                 ('void_ratio_A', 'eff_camb_A'),
                 ('void_ratio_B', 'eff_camb_B'),
-                ('dev_stress_A', 'eff_camb_A'),
-                ('dev_stress_B', 'eff_camb_B'),
+                ('dev_stress_A', 'ax_strain'),
+                ('dev_stress_B', 'ax_strain'),
                 ('nqp_A', 'ax_strain'),
                 ('nqp_B', 'ax_strain'),
             ]
 
             for idx, (y_col, x_col) in enumerate(plots):
                 ax = axs[idx]
-                for file_idx, (arquivo, df_cisalhamento) in enumerate(datasets.items()):
-                    sc = ax.scatter(df_cisalhamento[x_col], df_cisalhamento[y_col], picker=True)
-                    sc.set_gid(arquivo)
-                    artists.append(sc)
-
+                for arquivo, df_cisalhamento in datasets.items():
+                    if not df_cisalhamento.empty:
+                        sc = ax.scatter(df_cisalhamento[x_col], df_cisalhamento[y_col], picker=True, label=arquivo)
+                        artists.append(sc)
                 ax.set_xlabel(x_col)
                 ax.set_ylabel(y_col)
                 ax.set_title(f'{y_col} x {x_col}')
@@ -1094,6 +1329,7 @@ class InterfaceApp:
 
             plt.tight_layout()
 
+            # Janela de gráficos com barra de rolagem
             graph_window = tk.Toplevel(self.root)
             graph_window.title(f"Gráficos da Amostra {amostra_selecionada}")
             graph_window.geometry("1280x960")
@@ -1124,23 +1360,14 @@ class InterfaceApp:
             @cursor.connect("add")
             def on_add(sel):
                 x, y = sel.target
-                arquivo = sel.artist.get_gid()
-                sel.annotation.set_text(
-                    f"x: {x:.4f}\ny: {y:.4f}\nArquivo: {arquivo}"
-                )
+                sel.annotation.set_text(f"x: {x:.4f}\ny: {y:.4f}")
 
-            @cursor.connect("remove")
-            def on_remove(sel):
-                sel.annotation.set_visible(False)
-                sel.annotation.figure.canvas.draw_idle()
-
+            # Botões na parte inferior da janela
             button_frame = tk.Frame(scroll_frame)
             button_frame.pack(pady=10)
 
             tk.Button(button_frame, text="Configurar Escalas", command=lambda: self.configurar_escalas(fig, axs), width=20).pack(side="left", padx=10)
-
             tk.Button(button_frame, text="Filtrar Arquivos", command=lambda: self.filtrar_arquivos(graph_window, amostra_selecionada), width=20).pack(side="left", padx=10)
-
             tk.Button(button_frame, text="Sair", command=graph_window.destroy, width=20).pack(side="right", padx=10)
 
         except KeyError as e:
@@ -1167,9 +1394,10 @@ class InterfaceApp:
             self.amostra_listbox.insert(tk.END, amostra)
         self.amostra_listbox.pack()
 
-        tk.Button(frame, text="Avançar", command=self.avancar_amostra, width=15).pack(pady=10)
+        tk.Button(frame, text="Avançar", command=self.avancar_planilha_cliente, width=15).pack(pady=10)
 
         tk.Button(frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).pack(pady=10)
+
 
     def selecionar_tipo_ensaio(self):
         # Sempre obter a seleção atual da listbox
@@ -1224,8 +1452,9 @@ class InterfaceApp:
         tk.Radiobutton(metodo_frame, text="Método A", variable=self.metodo_var, value='A').pack(side=tk.LEFT, padx=5)
         tk.Radiobutton(metodo_frame, text="Método B", variable=self.metodo_var, value='B').pack(side=tk.LEFT, padx=5)
 
-        tk.Button(frame, text="Avançar", command=self.selecionar_arquivos, width=15).pack(pady=10)
-        tk.Button(frame, text="Voltar", command=self.selecionar_tipo_ensaio, width=15).pack(pady=10)
+        tk.Button(frame, text="Avançar", command=self.avancar_metodo, width=15).pack(pady=10)  # Alterado para chamar 'avancar_metodo'
+        tk.Button(frame, text="Voltar", command=self.selecionar_tipo_ensaio_screen, width=15).pack(pady=10)
+
 
     def avancar_metodo(self):
         metodo_selecionado = self.metodo_var.get()
@@ -1234,6 +1463,7 @@ class InterfaceApp:
             return
         self.metodo_selecionado = metodo_selecionado
         self.selecionar_arquivos()
+
 
     def selecionar_metodo_screen(self):
         self.clear_screen()
@@ -1365,11 +1595,18 @@ class InterfaceApp:
         else:
             messagebox.showerror("Erro", "Login e senha são obrigatórios!")
 
+    # interface.py
+    # Certifique-se de que a chamada para get_all_users está correta no método manage_users_screen
+
     def manage_users_screen(self):
         self.clear_screen()
         self.root.title("Gerenciar Usuários")
 
-        users = self.db_manager.get_all_users()
+        users = self.db_manager.get_all_users()  # Certifique-se de que este método existe
+        if not users:
+            messagebox.showinfo("Informação", "Nenhum usuário encontrado.")
+            self.create_main_menu()
+            return
 
         frame = tk.Frame(self.root)
         frame.pack(pady=50)
@@ -1386,6 +1623,7 @@ class InterfaceApp:
         tk.Button(button_frame, text="Excluir Usuário", command=self.delete_selected_user, width=20).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Voltar", command=self.create_main_menu, width=20).grid(row=0, column=1, padx=10)
 
+
     def delete_selected_user(self):
         selected_user = self.user_listbox.get(tk.ACTIVE)
         if selected_user:
@@ -1401,6 +1639,9 @@ class InterfaceApp:
             widget.destroy()
 
 if __name__ == "__main__":
+    print("ABRIU APLICAÇÃO")
+    db_manager = DatabaseManager()
     root = tk.Tk()
     app = InterfaceApp(root)
     root.mainloop()
+    print("FECHOU APLICAÇÃO")
