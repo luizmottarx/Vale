@@ -12,6 +12,9 @@ def safe_float_conversion(value):
     except (ValueError, TypeError):
         return 0.0
 
+# PreencherExcel.py
+# Corrija a consulta para obter metadados corretamente
+
 def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado, metodo):
     # Determinar o modelo de planilha com base no TipoEnsaio
     if tipo_ensaio_selecionado.startswith('TIR'):
@@ -36,7 +39,7 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
     # Abrir o workbook
     wb = load_workbook(novo_arquivo)
 
-    db_path = r'C:\Users\lgv_v\Documents\LUIZ\Laboratorio_Geotecnia.db'
+    db_path = r'C:\Users\lgv_v\Documents\LUIZ\database.db'
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
@@ -63,28 +66,32 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
             print(f"A planilha não contém a aba '{sheet_name}'.")
             continue
 
-        # Recuperar id_ensaio
-        cursor.execute("SELECT id_ensaio FROM Ensaio WHERE NomeCompleto = ?", (arquivo,))
+        # Recuperar idensaio via Cp table
+        cursor.execute("""
+            SELECT idensaio FROM Cp WHERE filename = ?
+        """, (arquivo,))
         result = cursor.fetchone()
         if not result:
-            print(f"Não foi possível encontrar id_ensaio para o arquivo {arquivo}")
+            print(f"Não foi possível encontrar idensaio para o arquivo {arquivo}")
             continue
-        id_ensaio = result[0]
+        idensaio = result[0]
 
         # Recuperar metadados
         cursor.execute("""
-            SELECT m.metadados, ma.valor_metadados
-            FROM MetadadosArquivo ma
-            JOIN Metadados m ON ma.id_metadados = m.id_metadados
-            WHERE ma.NomeCompleto = ?
-        """, (arquivo,))
-        metadados = dict(cursor.fetchall())
+            SELECT * FROM MetadadosArquivo WHERE idnome = ?
+        """, (idensaio,))
+        metadados_row = cursor.fetchone()
+        if not metadados_row:
+            print(f"Não foi possível encontrar metadados para idnome {idensaio}")
+            continue
+        columns = [description[0] for description in cursor.description]
+        metadados = dict(zip(columns, metadados_row))
 
         # Obter os estágios dos metadados
         try:
-            B_stage = int(metadados['B'])
-            Adensamento_stage = int(metadados['Adensamento'])
-            Cisalhamento_stage = int(metadados['Cisalhamento'])
+            B_stage = int(metadados['_B'])
+            Adensamento_stage = int(metadados['_ad'])
+            Cisalhamento_stage = int(metadados['_cis'])
         except KeyError as e:
             print(f"Estágio '{e.args[0]}' não encontrado nos metadados do arquivo {arquivo}.")
             continue
@@ -94,13 +101,11 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
 
         # Recuperar dados de EnsaiosTriaxiais
         cursor.execute("""
-            SELECT *
-            FROM EnsaiosTriaxiais
-            WHERE id_ensaio = ?
-        """, (id_ensaio,))
+            SELECT * FROM EnsaiosTriaxiais WHERE idnome = ?
+        """, (idensaio,))
         ensaio_data = cursor.fetchall()
         if not ensaio_data:
-            print(f"Nenhum dado encontrado para id_ensaio {id_ensaio}")
+            print(f"Nenhum dado encontrado para idensaio {idensaio}")
             continue
         colunas = [description[0] for description in cursor.description]
 
