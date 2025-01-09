@@ -536,21 +536,33 @@ class InterfaceApp:
         # Valor atual obtido do dicionário self.metadados
         valor_atual = self.metadados.get(selected_metadata, "")
 
+        # Garantir que valor_atual seja uma string
+        if not isinstance(valor_atual, str):
+            valor_atual = str(valor_atual)
+
+        # Inicializar o widget Entry antes de qualquer acesso
         self.metadata_entry = tk.Entry(frame, width=80)
         self.metadata_entry.insert(0, valor_atual)
         self.metadata_entry.pack(pady=10)
 
+        # Depuração: Verificar o tipo de self.metadata_entry e valor_atual
+        #print(f"Tipo de self.metadata_entry: {type(self.metadata_entry)}")
+        #print(f"valor_atual: {valor_atual} (Tipo: {type(valor_atual)})")
+
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
-        # Precisamos saber qual metadado está sendo editado para update_metadata
-        # Vamos armazenar em uma variável de instância
+        # Armazenar o metadado atual sendo editado
         self.current_editing_metadata = selected_metadata
 
+        # Botões de Ação
         tk.Button(button_frame, text="Salvar Alterações",
                 command=self.on_edit_save, width=20).grid(row=0, column=0, padx=5)
-        tk.Button(button_frame, text="Voltar", command=self.show_metadata_selection_screen, width=20).grid(row=0, column=1, padx=5)
-        tk.Button(button_frame, text="Sair", command=self.root.quit, width=20).grid(row=0, column=2, padx=5)
+        tk.Button(button_frame, text="Voltar",
+                command=self.show_metadata_selection_screen, width=20).grid(row=0, column=1, padx=5)
+        tk.Button(button_frame, text="Sair",
+                command=self.root.quit, width=20).grid(row=0, column=2, padx=5)
+
 
     def show_metadata_selection_screen(self):
         """
