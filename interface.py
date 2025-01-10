@@ -9,12 +9,12 @@ import sys
 import matplotlib.pyplot as plt
 from teste1 import FileProcessor
 from teste2 import StageProcessor
-from teste3 import TableProcessor, CisalhamentoData # Certifique-se de que o nome do arquivo está correto
+from teste3 import TableProcessor, CisalhamentoData 
 import mplcursors
 import random
 import numpy as np
 import pandas as pd
-from testeBD import DatabaseManager  # Importar a classe DatabaseManager de testeBD.py
+from testeBD import DatabaseManager  
 import re
 import traceback
 import PreencherExcel
@@ -126,8 +126,6 @@ class InterfaceApp:
         cursor = self.db_manager.conn.execute("SELECT * FROM usuarios WHERE login = ? AND senha = ?", (user, password))
         return cursor.fetchone() is not None
 
-# No método create_main_menu da classe InterfaceApp, adicionar o novo botão
-
     def create_main_menu(self):
         self.clear_screen()
         self.root.title("Menu Principal")
@@ -145,7 +143,6 @@ class InterfaceApp:
         tk.Button(frame, text="Ver Arquivos Refugados", command=self.ver_arquivos_refugados, width=30).pack(pady=10)
         tk.Button(frame, text="Gerar Planilha Cliente", command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
         tk.Button(frame, text="Sair", command=self.root.quit, width=30).pack(pady=10)
-
 
     def ver_arquivos_aprovados(self):
         self.ver_arquivos_status_individual('Aprovado')
@@ -177,7 +174,6 @@ class InterfaceApp:
 
         tk.Button(button_frame, text="Ver Gráfico", command=self.ver_grafico_arquivo_selecionado, width=15).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
-
 
     def ver_grafico_arquivo_selecionado(self):
         selection = self.arquivo_listbox.curselection()
@@ -259,7 +255,7 @@ class InterfaceApp:
             # 1) Lê metadados do arquivo .gds
             self.metadados = processor.process_gds_file(file_path)
 
-            # 2) (Opcional) Mescla com metadados fixos do DB
+            # 2) Mescla com metadados fixos do DB
             self.fixed_metadados = self.db_manager.get_fixed_metadados(self.selected_file)
             if self.fixed_metadados:
                 for k, v in self.fixed_metadados.items():
@@ -316,13 +312,11 @@ class InterfaceApp:
             messagebox.showerror("Erro", f"Erro ao processar o arquivo: {e}")
             self.create_main_menu()
 
-
     def unify_metadados_keys(self):
 
         desired_order = ["_B", "_ad", "_cis", "w_0", "w_f", "idcontrato", "idcampanha", "idamostra", "idtipoensaio", "sequencial", "cp", "repeticao"]
 
         possible_aliases = {
-            # Mantemos os alias sublinhados
             "B": "_B",
             "Adensamento": "_ad",
             "Cisalhamento": "_cis",
@@ -428,7 +422,6 @@ class InterfaceApp:
                 del self.metadados[old_key]
 
         # 2) Lista das colunas que realmente queremos guardar em MetadadosArquivo,
-        # já *sem* B, Adensamento, Cisalhamento (sem underline).
         metadadosarquivo_cols = [
             "idnome", "_B", "_ad", "_cis",
             "w_0", "w_f", "h_init", "d_init", "ram_diam", "spec_grav",
@@ -471,9 +464,6 @@ class InterfaceApp:
             if col in self.metadados:
                 final_dict[col] = self.metadados[col]
 
-        # Se você quiser manter "cp" e "repeticao" no dicionário para posterior uso
-        # (embora não sejam salvos diretamente em MetadadosArquivo),
-        # pode opcionalmente reintroduzi-los:
         if "cp" in self.metadados:
             final_dict["cp"] = self.metadados["cp"]
         if "repeticao" in self.metadados:
@@ -498,7 +488,7 @@ class InterfaceApp:
             messagebox.showinfo("Sucesso", "Metadados salvos com sucesso!")
 
             # Chama a função para exibir a tela de resultados
-            self.show_save_status()  # Alterado de show_results_screen para show_save_status
+            self.show_save_status()  
 
         except Exception as e:
             print(f"Erro ao salvar metadados: {e}")
@@ -617,7 +607,6 @@ class InterfaceApp:
                 command=self.root.quit, width=20).grid(row=0, column=3, padx=5)
 
 
-
     def on_edit_save(self):
         new_value = self.metadata_entry.get()
         if new_value:
@@ -710,7 +699,6 @@ class InterfaceApp:
         tk.Button(button_frame, text="Voltar ao Menu Principal", command=self.create_main_menu, width=25).grid(row=0, column=1, padx=5)
         tk.Button(button_frame, text="Sair", command=self.root.quit, width=20).grid(row=0, column=2, padx=5)
 
-
     def show_scatter_plots_wrapper(self):
         if self.selected_file:
             self.plotar_graficos_arquivo(self.selected_file)
@@ -755,7 +743,6 @@ class InterfaceApp:
         tk.Button(button_frame, text="Ver gráficos da amostra",  command=self.avancar_amostra, width=25).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Selecionar Individual", command=self.selecionar_individual_amostra, width=25).grid(row=0, column=1, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=25).grid(row=0, column=2, padx=10)
-
 
     def avancar_planilha_cliente(self):
         selection = self.amostra_listbox.curselection()
@@ -844,7 +831,6 @@ class InterfaceApp:
         tk.Button(button_frame, text="Gerar Planilha", command=lambda: self.chamar_gerar_planilha(arquivos_selecionados, tipo_ensaio_selecionado, self.metodo_planilha_var.get()), width=15).pack(side=tk.LEFT, padx=5)
         tk.Button(button_frame, text="Voltar", command=lambda: self.selecionar_arquivos_planilha_cliente(amostra_selecionada), width=15).pack(side=tk.RIGHT, padx=5)
 
-
     def chamar_gerar_planilha(self, arquivos_selecionados, tipo_ensaio_selecionado, metodo):
         try:
             from PreencherExcel import gerar_planilha_para_arquivos
@@ -855,7 +841,6 @@ class InterfaceApp:
             messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
         finally:
             self.create_main_menu()
-
 
     def selecionar_individual_amostra(self):
         selection = self.amostra_listbox.curselection()
@@ -925,7 +910,6 @@ class InterfaceApp:
             return
 
     def mostrar_ensaios_amostra(self, amostra_selecionada):
-        # Remova self.clear_screen()
         self.root.title(f"Arquivos da Amostra {amostra_selecionada}")
 
         # Obter todos os arquivos da amostra, excluindo os com status 'Refugado'
@@ -1607,14 +1591,12 @@ class InterfaceApp:
         else:
             messagebox.showerror("Erro", "Login e senha são obrigatórios!")
 
-    # interface.py
-    # Certifique-se de que a chamada para get_all_users está correta no método manage_users_screen
 
     def manage_users_screen(self):
         self.clear_screen()
         self.root.title("Gerenciar Usuários")
 
-        users = self.db_manager.get_all_users()  # Certifique-se de que este método existe
+        users = self.db_manager.get_all_users()  
         if not users:
             messagebox.showinfo("Informação", "Nenhum usuário encontrado.")
             self.create_main_menu()

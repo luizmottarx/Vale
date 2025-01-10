@@ -9,7 +9,6 @@ import numpy as np
 # Exemplo de conversão segura para float
 ###############################################################################
 def safe_float_conversion(value, default=0.0):
-    """Faz cast seguro para float; caso falhe, retorna 'default'."""
     try:
         return float(value)
     except (ValueError, TypeError):
@@ -17,19 +16,15 @@ def safe_float_conversion(value, default=0.0):
 
 ###############################################################################
 # Mapeamento de Metadados (Nome Legível -> Nome Abreviado/Coluna no BD)
-# Observação: B, Adensamento, Cisalhamento => _B, _ad, _cis
 ###############################################################################
 METADADOS_MAPPING = {
     # Contrato, Campanha, Amostra
     "Job reference:": "idcontrato",
     "Borehole:": "idcampanha",
     "Sample Name:": "idamostra",
-
-    # B, Adensamento, Cisalhamento => underline
     "B": "_B",
     "Adensamento": "_ad",
     "Cisalhamento": "_cis",
-
     "Volume de umidade médio INICIAL": "w_0",
     "Volume de umidade médio FINAL": "w_f",
     "Initial Height (mm)": "h_init",
@@ -227,7 +222,6 @@ class DatabaseManager:
                 """)
 
                 # Tabela CP
-                # Correção 1: cp e repeticao => TEXT
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS Cp (
                         idnome INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -251,8 +245,6 @@ class DatabaseManager:
                 """)
 
                 # Tabela MetadadosArquivo
-                # Correção 2: remover colunas B, Adensamento, Cisalhamento sem underline
-                # Mantemos apenas _B, _ad, _cis
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS MetadadosArquivo (
                         idnome INTEGER PRIMARY KEY,
@@ -449,7 +441,6 @@ class DatabaseManager:
                 """)
 
                 # GranulometriaA
-                # Correção 3: idensaio como PK + FOREIGN KEY
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS GranulometriaA (
                         idensaio INTEGER PRIMARY KEY,
@@ -458,7 +449,6 @@ class DatabaseManager:
                 """)
 
                 # GranulometriaCP
-                # Correção 4: idnome como PK + FOREIGN KEY
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS GranulometriaCP (
                         idnome INTEGER PRIMARY KEY,
