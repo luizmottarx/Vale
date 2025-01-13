@@ -351,3 +351,8 @@ idnome = coluna da tabela Cp
 	todas as columns_to_save
 	]
 
+
+13/01/2025
+- testar ensaio de adensamento na aplicação
+
+- alterar a forma de inputar variável de 'Cisalhamento', ao invés de 1 unico valor = stage_no, e os valores sejam dois o stage_no de cisalhamento seja entre 8 e 11, ou seja seria stage_no = 8,9,10 e 11
