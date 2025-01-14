@@ -13,8 +13,6 @@ def safe_float_conversion(value):
         return 0.0
 
 # PreencherExcel.py
-# Corrija a consulta para obter metadados corretamente
-
 def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado, metodo):
     # Determinar o modelo de planilha com base no TipoEnsaio
     if tipo_ensaio_selecionado.startswith('TIR'):
