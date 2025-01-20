@@ -356,3 +356,105 @@ idnome = coluna da tabela Cp
 - testar ensaio de adensamento na aplicação
 
 - alterar a forma de inputar variável de 'Cisalhamento', ao invés de 1 unico valor = stage_no, e os valores sejam dois o stage_no de cisalhamento seja entre 8 e 11, ou seja seria stage_no = 8,9,10 e 11
+
+ARQUIVO .GDS ADENSAMENTO:
+
+"Stage Number",
+"Time since start of test (s)",
+"Time since start of stage (s)",
+"Radial Pressure (kPa)",
+"Radial Volume (mm³)",
+"Back Pressure (kPa)",
+"Back Volume (mm³)",
+"Load Cell (kN)",
+"Pore Pressure (kPa)",
+"Axial Displacement (mm)",
+"L/C Pressure (kPa)",
+"L/C Volume (mm³)",
+"Local Axial 1 (mm)",
+"Local Axial 2 (mm)",
+"Local Radial (mm)",
+"Base Pressure (kPa)",
+"Base Volume (mm³)",
+"Back Differential Pressure (kPa)",
+"Axial Displacement 2 (mm)",
+"Pore Air Pressure (kPa)",
+"Pore Air Volume (mm³)",
+"Atmospheric Pressure (kPa)",
+"Temperature (°C)",
+"Mid Plane PWP (kPa)",
+"Back to Cell Differential (kPa)",
+"Total Volume Change (mm³)",
+"Undefined Tx 1",
+"Undefined Tx 2",
+"Undefined Tx 3",
+"Axial Force (kN)",
+"Axial Strain (%)",
+"Av Diameter Change (mm)",
+"Radial Strain (%)",
+"Axial Stress (kPa)",
+"Eff. Axial Stress (kPa)",
+"Eff. Radial Stress (kPa)",
+"Deviator Stress (kPa)",
+"Total Stress Ratio",
+"Eff. Stress Ratio",
+"Current Area (mm²)",
+"Shear Strain (%)",
+"Cambridge p (kPa)",
+"Eff. Cambridge p' (kPa)",
+"Max Shear Stress t (kPa)",
+"Volume Change (mm³)",
+"B Value",
+"Mean Stress s/Eff. Axial Stress 2",
+"Excess PWP (kPa)",
+"PWP Ratio",
+"Lower Chamber Displacement (mm)",
+"Lower Chamber Axial Load (kN)",
+"Specimen Air Volume (mm³)",
+"Matric Suction (kPa)",
+"Voids ratio",
+"Degree of Saturation (%)",
+"Specimen Water Volume (mm³)",
+"kRT constant"
+
+
+
+ARQUIVO .GDS TRIAXIAL, MAPEAMENTO COLUNAS:
+Criar novo botão, Encontrar Arquivos Adensamento em interface.py
+Criar lógica de tratamento do arquivo, identificando corretamente a sequencia dos arquivos alterando a coluna de stage_no,(selecionar primeiro arquivo, selecionar segundo arquivo, selecionar terceiro arquivo)
+Criar nova tabela no banco de dados EnsaiosAdensamento, com as seguintes colunas mapeadas
+Criar novo código chamado teste4, novo mapeamento de novas colunas e criar cálculos de cada coluna tratada, (calcular método A?)
+
+
+"Stage Number",
+"Time since start of test (s)","Time since start of stage (s)","Radial Pressure (kPa)","Radial Volume (mm³)","Back Pressure (kPa)","Back Volume (mm³)","Load Cell (kN)","Pore Pressure (kPa)","Axial Displacement (mm)","Axial Force (kN)","Axial Strain (%)","Av Diameter Change (mm)","Radial Strain (%)","Axial Stress (kPa)","Eff. Axial Stress (kPa)","Eff. Radial Stress (kPa)","Deviator Stress (kPa)","Total Stress Ratio","Eff. Stress Ratio","Current Area (mm²)","Shear Strain (%)","Cambridge p (kPa)","Eff. Cambridge p' (kPa)","Max Shear Stress t (kPa)","Volume Change (mm³)","B Value","Mean Stress s/Eff. Axial Stress 2"
+ {
+                original_headers[0]:  'stage_no',
+                original_headers[1]:  'time_test_start',
+                original_headers[2]:  'time_stage_start',
+                original_headers[3]:  'rad_press_Original',
+                original_headers[4]:  'rad_vol_Original',
+                original_headers[5]:  'back_press_Original',
+                original_headers[6]:  'back_vol_Original',
+                original_headers[7]:  'load_cell_Original',
+                original_headers[8]:  'pore_press_Original',
+                original_headers[9]:  'ax_disp_Original',
+                original_headers[10]: 'ax_force_Original',
+                original_headers[11]: 'ax_strain_Original',
+                original_headers[12]: 'avg_diam_chg_Original',
+                original_headers[13]: 'rad_strain_Original',
+                original_headers[14]: 'ax_strain_Original_2',
+                original_headers[15]: 'eff_ax_stress_Original',
+                original_headers[16]: 'eff_rad_stress_Original',
+                original_headers[17]: 'dev_stress_Original',
+                original_headers[18]: 'total_stress_rat_Original',
+                original_headers[19]: 'eff_stress_rat_Original',
+                original_headers[20]: 'cur_area_Original',
+                original_headers[21]: 'shear_strain_Original',
+                original_headers[22]: 'camb_p_Original',
+                original_headers[23]: 'eff_camb_p_Original',
+                original_headers[24]: 'max_shear_stress_Original',
+                original_headers[25]: 'vol_change_Original',
+                original_headers[26]: 'b_value_Original',
+                original_headers[27]: 'mean_stress_Original'
+            }
