@@ -458,3 +458,7 @@ Criar novo código chamado teste4, novo mapeamento de novas colunas e criar cál
                 original_headers[26]: 'b_value_Original',
                 original_headers[27]: 'mean_stress_Original'
             }
+
+
+			preciso criar uma rede local, tenho rotiadores Deco da Tplink configuradas, e computadores clientes que vão salvar os arquivos da pasta do fluxo 'Encontrar Arquivos', preciso configurar corretamente a rede a pasta que ficará localizada no pc servidor, onde quando eu rodar a aplicação vai buscar os arquivos para salvar no banco nessa pasta. 
+a pasta compartilhada precisa estar configurada levando em consideração que a rede decoAdm está em uma rede privada e os pcs clientes precisam salvar o arquivo nessa pasta para encontrar os arquivos com a aplicação e salvar no banco de dados
