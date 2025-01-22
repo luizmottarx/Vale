@@ -9,15 +9,20 @@ import sys
 import matplotlib.pyplot as plt
 from teste1 import FileProcessor
 from teste2 import StageProcessor
-from teste3 import TableProcessor, CisalhamentoData 
+from teste3 import TableProcessor, CisalhamentoData # Certifique-se de que o nome do arquivo está correto
 import mplcursors
 import random
 import numpy as np
 import pandas as pd
-from testeBD import DatabaseManager  
+from testeBD import DatabaseManager  # Importar a classe DatabaseManager de testeBD.py
 import re
 import traceback
 import PreencherExcel
+import teste1
+import teste2
+import teste3
+import testeBD
+
 
 class InterfaceApp:
     def _rgb_to_hex(self, rgb):
@@ -126,6 +131,8 @@ class InterfaceApp:
         cursor = self.db_manager.conn.execute("SELECT * FROM usuarios WHERE login = ? AND senha = ?", (user, password))
         return cursor.fetchone() is not None
 
+# No método create_main_menu da classe InterfaceApp, adicionar o novo botão
+
     def create_main_menu(self):
         self.clear_screen()
         self.root.title("Menu Principal")
@@ -143,6 +150,7 @@ class InterfaceApp:
         tk.Button(frame, text="Ver Arquivos Refugados", command=self.ver_arquivos_refugados, width=30).pack(pady=10)
         tk.Button(frame, text="Gerar Planilha Cliente", command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
         tk.Button(frame, text="Sair", command=self.root.quit, width=30).pack(pady=10)
+
 
     def ver_arquivos_aprovados(self):
         self.ver_arquivos_status_individual('Aprovado')
@@ -175,6 +183,7 @@ class InterfaceApp:
         tk.Button(button_frame, text="Ver Gráfico", command=self.ver_grafico_arquivo_selecionado, width=15).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
 
+
     def ver_grafico_arquivo_selecionado(self):
         selection = self.arquivo_listbox.curselection()
         if selection:
@@ -189,7 +198,7 @@ class InterfaceApp:
         self.clear_screen()
         self.root.title("Encontrar Arquivos")
 
-        directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
+        directory = resource_path('LUIZ-Teste')
         if not os.path.isdir(directory):
             messagebox.showerror("Erro", f"O diretório {directory} não existe.")
             self.create_main_menu()
@@ -228,17 +237,6 @@ class InterfaceApp:
         tk.Button(button_frame, text="Voltar", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
 
     def select_file(self):
-        """
-        Fluxo principal ao clicar em "Avançar" depois de listar os arquivos .gds:
-        1) Seleciona o arquivo e obtém seu caminho completo.
-        2) Lê os metadados do arquivo (FileProcessor).
-        3) Mescla (opcional) com metadados fixos do DB.
-        4) Garante que Job reference:/Borehole:/Sample Name:/Description of Sample:/Test Number: não fiquem vazios.
-        5) Extrai idtipoensaio e sequencial de "Description of Sample:".
-        6) Extrai cp e repeticao de "Test Number:".
-        7) Unifica chaves duplicadas e filtra colunas (self.unify_metadados_keys).
-        8) Mostra a tela de edição (show_metadata_selection_screen).
-        """
         selection = self.file_listbox.curselection()
         if not selection:
             messagebox.showerror("Erro", "Nenhum arquivo selecionado!")
@@ -252,18 +250,13 @@ class InterfaceApp:
 
         processor = FileProcessor(directory)
         try:
-            # 1) Lê metadados do arquivo .gds
             self.metadados = processor.process_gds_file(file_path)
-
-            # 2) Mescla com metadados fixos do DB
             self.fixed_metadados = self.db_manager.get_fixed_metadados(self.selected_file)
             if self.fixed_metadados:
                 for k, v in self.fixed_metadados.items():
-                    # só preenche se estiver vazio
                     if k not in self.metadados or not self.metadados[k]:
                         self.metadados[k] = v
 
-            # 3) Garante chaves básicas
             if "idcontrato" in self.metadados and not self.metadados.get("Job reference:"):
                 self.metadados["Job reference:"] = self.metadados["idcontrato"]
             if "idcampanha" in self.metadados and not self.metadados.get("Borehole:"):
@@ -275,51 +268,60 @@ class InterfaceApp:
             if "test_number" in self.metadados and not self.metadados.get("Test Number:"):
                 self.metadados["Test Number:"] = self.metadados["test_number"]
 
-            # 4) Extrai idtipoensaio e sequencial de "Description of Sample:"
+            # Ajusta caso o FileProcessor tenha usado a chave "Description of Sample" (sem dois-pontos)
+            if "Description of Sample" in self.metadados and "Description of Sample:" not in self.metadados:
+                self.metadados["Description of Sample:"] = self.metadados["Description of Sample"]
+                del self.metadados["Description of Sample"]
+
             desc_value = self.metadados.get("Description of Sample:", "").strip()
-            # Ajustar regex para permitir qualquer quantidade de espaços e considerar letras minúsculas
             match_desc = re.match(r"(\d+)[Ss](\d+)", desc_value)
             if match_desc:
-                self.metadados["idtipoensaio"] = int(match_desc.group(1))  # Converter para int
-                self.metadados["sequencial"]   = int(match_desc.group(2))  # Converter para int
+                self.metadados["idtipoensaio"] = int(match_desc.group(1))
+                self.metadados["sequencial"] = int(match_desc.group(2))
             else:
-                # Tratar caso não corresponda
                 self.metadados["idtipoensaio"] = 0
-                self.metadados["sequencial"]   = 0
+                self.metadados["sequencial"] = 0
 
-            # 5) Extrai cp e repeticao de "Test Number:"
             test_value = self.metadados.get("Test Number:", "").strip()
-            # Ajustar regex para capturar letras e números corretamente
             match_test = re.match(r"([A-Za-z]+)[Rr]?(\d+)", test_value)
             if match_test:
-                self.metadados["cp"]         = match_test.group(1)[0].upper()  # Pega apenas a primeira letra e converte para maiúscula
-                self.metadados["repeticao"]  = int(match_test.group(2))  # Converter para int
+                self.metadados["cp"] = match_test.group(1)[0].upper()
+                self.metadados["repeticao"] = int(match_test.group(2))
             else:
-                self.metadados["cp"]         = None
-                self.metadados["repeticao"]  = None
+                self.metadados["cp"] = None
+                self.metadados["repeticao"] = None
 
-            # 6) Unifica chaves duplicadas e filtra apenas colunas que serão salvas
             self.unify_metadados_keys()
-
-            # 7) Se ainda estiver vazio, aborta
             if not self.metadados:
                 raise ValueError("Nenhum metadado encontrado no arquivo.")
 
-            # 8) Exibe a tela de edição de metadados
             self.show_metadata_selection_screen()
 
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao processar o arquivo: {e}")
             self.create_main_menu()
 
-    def unify_metadados_keys(self):
 
-        desired_order = ["_B", "_ad", "_cis", "w_0", "w_f", "idcontrato", "idcampanha", "idamostra", "idtipoensaio", "sequencial", "cp", "repeticao"]
+    def unify_metadados_keys(self):
+        """
+        Ajusta as chaves de metadados lidas do arquivo, mapeando-as para
+        as colunas que realmente queremos salvar no banco de dados.
+        Aqui ocorre a lógica de converter 'Cisalhamento' em dois valores:
+        '_cis_inicial' e '_cis_final'.
+        """
+        desired_order = ["_B", "_ad", "_cis_inicial", "_cis_final", "w_0", "w_f",
+                        "idcontrato", "idcampanha", "idamostra", "idtipoensaio",
+                        "sequencial", "cp", "repeticao"]
 
         possible_aliases = {
             "B": "_B",
             "Adensamento": "_ad",
-            "Cisalhamento": "_cis",
+
+            # ALTERAÇÃO: Antes era "Cisalhamento" -> "_cis" teste
+            # Agora possuímos dois campos:
+            "Cisalhamento Inicial": "_cis_inicial",
+            "Cisalhamento Final": "_cis_final",
+
             "Volume de umidade médio INICIAL": "w_0",
             "Volume de umidade médio FINAL": "w_f",
             "Initial Height (mm)": "h_init",
@@ -413,39 +415,27 @@ class InterfaceApp:
             "camb_p_B0": "camb_p_B0"
         }
 
-        # 1) Renomeia as chaves com alias
-        for old_key, new_key in possible_aliases.items():
+        # 1) Renomear as chaves do dicionário self.metadados conforme 'possible_aliases'
+        for old_key, new_key in list(possible_aliases.items()):
             if old_key in self.metadados:
-                # Se new_key estiver vazio, substitui
+                # Se new_key estiver vazio ou não existir, substitui
                 if new_key not in self.metadados or not self.metadados[new_key]:
                     self.metadados[new_key] = self.metadados[old_key]
                 del self.metadados[old_key]
 
-        # 2) Lista das colunas que realmente queremos guardar em MetadadosArquivo,
-        metadadosarquivo_cols = [
-            "idnome", "_B", "_ad", "_cis",
-            "w_0", "w_f", "h_init", "d_init", "ram_diam", "spec_grav",
-            "idcontrato", "idcampanha", "idamostra","idtipoensaio", "depth", "samp_date", "tipo",
-            "init_mass", "init_dry_mass", "spec_grav_assmeas",
-            "date_test_started", "date_test_finished", "spec_type",
-            "top_drain", "base_drain", "side_drains", "fin_mass", "fin_dry_mass",
-            "mach_no", "press_sys", "cell_no", "ring_no", "job_loc", "mem_thick",
-            "sequencial", "tech_name", "liq_lim", "plas_lim", "avg_wc_trim", "notes",
-            "mass_no4", "mass_no10", "mass_no40", "mass_no200", "mass_silt",
-            "mass_clay", "mass_coll", "trim_proc", "moist_cond", "ax_stress_inund",
-            "water_desc", "test_meth", "interp_cv", "astm_dep", "wc_obt",
-            "sat_meth", "post_consol_area", "fail_crit", "load_filt_paper",
-            "filt_paper_cov", "young_mod_mem", "test_time", "test_date",
-            "start_rep_data", "dry_unit_weight", "init_void_ratio", "init_sat",
-            "post_cons_void", "final_moisture", "Saturacao_c", "v_0", "vol_solid",
-            "v_w_f", "ax_disp_0", "back_vol_0", "back_press_0", "rad_press_0",
-            "pore_press_0", "ax_disp_c", "back_vol_c", "h_init_c", "back_vol_f",
-            "v_c_A", "cons_void_vol", "v_c_B", "w_c_A", "w_c_B", "void_ratio_c",
-            "void_ratio_f", "void_ratio_m", "vol_change_c", "vol_change_f_c",
-            "final_void_vol", "consolidated_area", "camb_p_A0", "camb_p_B0"
-        ]
+        # 2) Exemplo: caso o arquivo .gds ainda use apenas "Cisalhamento"
+        # e a gente queira automaticamente criar '_cis_inicial' e '_cis_final'
+        if "Cisalhamento" in self.metadados:
+            valor_cis = str(self.metadados["Cisalhamento"]).strip()
+            if "-" in valor_cis:
+                ini, fim = valor_cis.split("-")
+            else:
+                ini, fim = valor_cis, valor_cis  # Ex.: se vier "8", então 8-8
+            self.metadados["_cis_inicial"] = ini
+            self.metadados["_cis_final"] = fim
+            del self.metadados["Cisalhamento"]
 
-        # 3) Ordena os metadados conforme desired_order e adiciona os restantes
+        # 3) Ordenar metadados conforme 'desired_order'
         ordered_metadata = []
         remaining_metadata = []
 
@@ -455,21 +445,30 @@ class InterfaceApp:
             else:
                 remaining_metadata.append((key, value))
 
-        # Mantém a ordem desejada primeiro
+        # Reordena a lista final
         self.metadata_items = ordered_metadata + remaining_metadata
 
-        # 4) Filtra apenas as colunas que serão salvas
+        # 4) Filtra apenas as colunas que serão salvas em MetadadosArquivo (se desejado)
+        # Exemplo:
+        metadadosarquivo_cols = [
+            "_B", "_ad", "_cis_inicial", "_cis_final",
+            "w_0", "w_f", "h_init", "d_init", "ram_diam", "spec_grav",
+            "idcontrato", "idcampanha", "idamostra", "idtipoensaio", "depth",
+            "samp_date", "tipo", "init_mass", "init_dry_mass", "spec_grav_assmeas",
+            # ...
+        ]
+
         final_dict = {}
         for col in metadadosarquivo_cols:
             if col in self.metadados:
                 final_dict[col] = self.metadados[col]
 
+        # Exemplos de cp e repeticao que podem não estar em metadadosarquivo_cols
         if "cp" in self.metadados:
             final_dict["cp"] = self.metadados["cp"]
         if "repeticao" in self.metadados:
             final_dict["repeticao"] = self.metadados["repeticao"]
 
-        # 5) Substituir self.metadados
         self.metadados = final_dict
 
 
@@ -488,7 +487,7 @@ class InterfaceApp:
             messagebox.showinfo("Sucesso", "Metadados salvos com sucesso!")
 
             # Chama a função para exibir a tela de resultados
-            self.show_save_status()  
+            self.show_save_status()  # Alterado de show_results_screen para show_save_status
 
         except Exception as e:
             print(f"Erro ao salvar metadados: {e}")
@@ -515,6 +514,11 @@ class InterfaceApp:
             messagebox.showerror("Erro", "Nenhum metadado selecionado!")
 
     def show_metadata_edit_screen(self, selected_metadata):
+        """
+        Exibe a tela para editar um metadado específico.
+        Caso o metadado seja '_cis_inicial' ou '_cis_final',
+        usamos um Entry mais simples, pois queremos um valor numérico (int).
+        """
         self.clear_screen()
         self.root.title("Edição de Metadado")
 
@@ -523,35 +527,31 @@ class InterfaceApp:
 
         tk.Label(frame, text=f"Editando: {selected_metadata}").pack(pady=10)
 
-        # Valor atual obtido do dicionário self.metadados
-        valor_atual = self.metadados.get(selected_metadata, "")
-
-        # Garantir que valor_atual seja uma string
-        if not isinstance(valor_atual, str):
-            valor_atual = str(valor_atual)
-
-        # Inicializar o widget Entry antes de qualquer acesso
-        self.metadata_entry = tk.Entry(frame, width=80)
-        self.metadata_entry.insert(0, valor_atual)
-        self.metadata_entry.pack(pady=10)
-
-        # Depuração: Verificar o tipo de self.metadata_entry e valor_atual
-        #print(f"Tipo de self.metadata_entry: {type(self.metadata_entry)}")
-        #print(f"valor_atual: {valor_atual} (Tipo: {type(valor_atual)})")
+        # Caso seja cisalhamento inicial/final, esperamos um valor int
+        if selected_metadata in ["_cis_inicial", "_cis_final"]:
+            valor_atual = str(self.metadados.get(selected_metadata, ""))
+            self.metadata_entry = tk.Entry(frame, width=20)
+            self.metadata_entry.insert(0, valor_atual)
+            self.metadata_entry.pack(pady=10)
+        else:
+            # Edição normal para os demais metadados
+            valor_atual = str(self.metadados.get(selected_metadata, ""))
+            self.metadata_entry = tk.Entry(frame, width=80)
+            self.metadata_entry.insert(0, valor_atual)
+            self.metadata_entry.pack(pady=10)
 
         button_frame = tk.Frame(frame)
         button_frame.pack(pady=10)
 
-        # Armazenar o metadado atual sendo editado
         self.current_editing_metadata = selected_metadata
 
-        # Botões de Ação
         tk.Button(button_frame, text="Salvar Alterações",
                 command=self.on_edit_save, width=20).grid(row=0, column=0, padx=5)
         tk.Button(button_frame, text="Voltar",
                 command=self.show_metadata_selection_screen, width=20).grid(row=0, column=1, padx=5)
         tk.Button(button_frame, text="Sair",
                 command=self.root.quit, width=20).grid(row=0, column=2, padx=5)
+
 
 
     def show_metadata_selection_screen(self):
@@ -572,7 +572,7 @@ class InterfaceApp:
         self.metadata_list.pack(fill="both", expand=True)
 
         # Define a ordem desejada
-        desired_order = ["_B", "_ad", "_cis", "w_0", "w_f", "idcontrato", "idcampanha", "idamostra", "idtipoensaio", "sequencial", "cp", "repeticao"]
+        desired_order = ["_B", "_ad", "_cis_inicial", "_cis_final", "w_0", "w_f", "idcontrato", "idcampanha", "idamostra", "idtipoensaio", "sequencial", "cp", "repeticao"]
 
         # Cria uma lista de pares (chave, valor) ordenados
         ordered_metadata = []
@@ -607,17 +607,43 @@ class InterfaceApp:
                 command=self.root.quit, width=20).grid(row=0, column=3, padx=5)
 
 
+
     def on_edit_save(self):
+        """
+        Função chamada ao clicar em "Salvar Alterações" na tela de edição de um metadado.
+        Aqui lidamos separadamente com '_cis_inicial' e '_cis_final',
+        que devem ser valores inteiros (intervalo de estágios).
+        """
         new_value = self.metadata_entry.get()
+
+        # Se for cisalhamento inicial ou final, convertemos para int
+        if self.current_editing_metadata in ["_cis_inicial", "_cis_final"]:
+            if not new_value.strip():
+                messagebox.showerror("Erro", "O valor do cisalhamento não pode estar vazio!")
+                return
+            try:
+                self.metadados[self.current_editing_metadata] = int(new_value)
+                messagebox.showinfo("Sucesso",
+                                    f"{self.current_editing_metadata} atualizado para {new_value}")
+            except ValueError:
+                messagebox.showerror("Erro", "Insira um valor inteiro válido para cisalhamento!")
+                return
+
+            self.show_metadata_selection_screen()
+            return
+
+        # Para os demais metadados, mantemos a lógica anterior
         if new_value:
             if self.current_editing_metadata in self.metadados:
                 self.metadados[self.current_editing_metadata] = new_value
-                messagebox.showinfo("Sucesso", f"Metadado '{self.current_editing_metadata}' atualizado para '{new_value}'!")
+                messagebox.showinfo("Sucesso",
+                                    f"Metadado '{self.current_editing_metadata}' atualizado para '{new_value}'!")
                 self.show_metadata_selection_screen()
             else:
                 messagebox.showerror("Erro", f"Metadado '{self.current_editing_metadata}' não encontrado.")
         else:
             messagebox.showerror("Erro", "O valor não pode estar vazio!")
+
 
 
     def get_tipoensaio_id(self, tipo_ensaio):
@@ -699,6 +725,7 @@ class InterfaceApp:
         tk.Button(button_frame, text="Voltar ao Menu Principal", command=self.create_main_menu, width=25).grid(row=0, column=1, padx=5)
         tk.Button(button_frame, text="Sair", command=self.root.quit, width=20).grid(row=0, column=2, padx=5)
 
+
     def show_scatter_plots_wrapper(self):
         if self.selected_file:
             self.plotar_graficos_arquivo(self.selected_file)
@@ -743,6 +770,7 @@ class InterfaceApp:
         tk.Button(button_frame, text="Ver gráficos da amostra",  command=self.avancar_amostra, width=25).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Selecionar Individual", command=self.selecionar_individual_amostra, width=25).grid(row=0, column=1, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=25).grid(row=0, column=2, padx=10)
+
 
     def avancar_planilha_cliente(self):
         selection = self.amostra_listbox.curselection()
@@ -831,6 +859,7 @@ class InterfaceApp:
         tk.Button(button_frame, text="Gerar Planilha", command=lambda: self.chamar_gerar_planilha(arquivos_selecionados, tipo_ensaio_selecionado, self.metodo_planilha_var.get()), width=15).pack(side=tk.LEFT, padx=5)
         tk.Button(button_frame, text="Voltar", command=lambda: self.selecionar_arquivos_planilha_cliente(amostra_selecionada), width=15).pack(side=tk.RIGHT, padx=5)
 
+
     def chamar_gerar_planilha(self, arquivos_selecionados, tipo_ensaio_selecionado, metodo):
         try:
             from PreencherExcel import gerar_planilha_para_arquivos
@@ -841,6 +870,7 @@ class InterfaceApp:
             messagebox.showerror("Erro", f"Ocorreu um erro ao gerar a planilha: {e}")
         finally:
             self.create_main_menu()
+
 
     def selecionar_individual_amostra(self):
         selection = self.amostra_listbox.curselection()
@@ -910,6 +940,7 @@ class InterfaceApp:
             return
 
     def mostrar_ensaios_amostra(self, amostra_selecionada):
+        # Remova self.clear_screen()
         self.root.title(f"Arquivos da Amostra {amostra_selecionada}")
 
         # Obter todos os arquivos da amostra, excluindo os com status 'Refugado'
@@ -1035,47 +1066,57 @@ class InterfaceApp:
             return default
         
     def plotar_graficos_arquivo(self, arquivo_selecionado):
+        """
+        Carrega os dados do arquivo selecionado, obtém os metadados
+        e plota diversos gráficos referentes ao intervalo de cisalhamento.
+        """
         try:
-            # Obter os dados do arquivo selecionado
+            # 1) Obter dados do arquivo
             data = self.db_manager.get_data_for_file(arquivo_selecionado)
             if data is None:
                 messagebox.showerror("Erro", "Não foi possível obter os dados para plotagem.")
                 return
 
-            # Obter metadados para o arquivo
+            # 2) Obter metadados para o arquivo
             metadados = self.db_manager.get_metadata_for_file(arquivo_selecionado)
             if not metadados:
                 messagebox.showerror("Erro", "Nenhum metadado encontrado para o arquivo selecionado.")
                 return
 
-            # Obter os valores dos estágios dinamicamente dos metadados
+            # 3) Ler cisalhamento inicial e final (default 8~11, por exemplo)
             try:
-                cisalhamento_stage = int(float(metadados.get("Cisalhamento", 8)))
-                adensamento_stage = int(float(metadados.get("Adensamento", 7)))
-                b_stage = int(float(metadados.get("B", 5)))
+                cis_inicial = int(float(metadados.get("Cisalhamento Inicial", 8)))
+                cis_final   = int(float(metadados.get("Cisalhamento Final", 8)))
             except ValueError as ve:
-                messagebox.showerror("Erro", f"Erro ao converter metadados para inteiros: {ve}")
+                messagebox.showerror("Erro", f"Erro ao converter valores de Cisalhamento para inteiro: {ve}")
                 return
 
-            # Converter a lista de dicts para DataFrame
+            # 4) Converter lista de dicts em DataFrame
             df = pd.DataFrame(data)
 
-            # Converter as colunas necessárias para float
+            # 5) Converter colunas necessárias para float
             numeric_columns = [
                 'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
-                'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B', 'ax_strain',
-                'vol_strain', 'du_kpa', 'm_A', 'm_B', 'stage_no'
+                'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B',
+                'ax_strain', 'vol_strain', 'du_kpa', 'm_A', 'm_B', 'stage_no'
             ]
             for col in numeric_columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # Filtrar os dados para o estágio de cisalhamento
-            df_cisalhamento = df[df['stage_no'] == cisalhamento_stage]
+            # 6) Filtrar dados pelo intervalo de cisalhamento
+            df_cisalhamento = df[
+                (df['stage_no'] >= cis_inicial) &
+                (df['stage_no'] <= cis_final)
+            ]
 
             if df_cisalhamento.empty:
-                messagebox.showinfo("Informação", "Nenhum dado encontrado para o estágio de cisalhamento.")
+                messagebox.showinfo(
+                    "Informação",
+                    f"Nenhum dado encontrado no intervalo de cisalhamento ({cis_inicial} a {cis_final})."
+                )
                 return
 
+            # 7) Definir os plots desejados (y_col, x_col)
             plots = [
                 ('dev_stress_A', 'ax_strain'),
                 ('dev_stress_B', 'ax_strain'),
@@ -1090,6 +1131,11 @@ class InterfaceApp:
                 ('m_A', 'ax_strain'),
                 ('m_B', 'ax_strain'),
             ]
+
+            # 8) Plotar em subplots
+            import mplcursors
+            import matplotlib.pyplot as plt
+
             num_plots = len(plots)
             cols = 3
             rows = num_plots // cols + int(num_plots % cols > 0)
@@ -1099,37 +1145,51 @@ class InterfaceApp:
 
             artists = []
             for i, (y_col, x_col) in enumerate(plots):
-                if i >= len(axs):
-                    break
-
-                sc = axs[i].scatter(df_cisalhamento[x_col], df_cisalhamento[y_col], picker=True, label=arquivo_selecionado)
+                ax = axs[i]
+                # Scatter plot
+                sc = ax.scatter(
+                    df_cisalhamento[x_col],
+                    df_cisalhamento[y_col],
+                    picker=True,
+                    label=arquivo_selecionado
+                )
+                ax.set_xlabel(x_col)
+                ax.set_ylabel(y_col)
+                ax.set_title(f"{y_col} x {x_col}")
                 artists.append(sc)
-                axs[i].set_xlabel(x_col)
-                axs[i].set_ylabel(y_col)
-                axs[i].set_title(f'{y_col} x {x_col}')
 
-            for idx in range(len(plots), len(axs)):
-                fig.delaxes(axs[idx])
+            # Se sobrar algum eixo não usado, removemos
+            for i in range(num_plots, len(axs)):
+                fig.delaxes(axs[i])
 
             plt.tight_layout()
 
+            # 9) Janela Tk para exibir os gráficos
             graph_window = tk.Toplevel(self.root)
             graph_window.title(f"Gráficos do Arquivo {arquivo_selecionado}")
             graph_window.geometry("1280x960")
 
+            from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+
+            # Cria Canvas + Scrollbars
             canvas = tk.Canvas(graph_window)
             scroll_y = tk.Scrollbar(graph_window, orient="vertical", command=canvas.yview)
             scroll_x = tk.Scrollbar(graph_window, orient="horizontal", command=canvas.xview)
             canvas.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
 
-            scroll_frame = tk.Frame(canvas)
-            scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-
-            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
             canvas.pack(side="left", fill="both", expand=True)
             scroll_y.pack(side="right", fill="y")
             scroll_x.pack(side="bottom", fill="x")
 
+            # Cria um frame interno ao Canvas
+            scroll_frame = tk.Frame(canvas)
+            scroll_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+
+            # Agora insere o FigureCanvas e a toolbar dentro de scroll_frame
             canvas_plot = FigureCanvasTkAgg(fig, master=scroll_frame)
             canvas_plot.draw()
             canvas_plot.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -1144,6 +1204,44 @@ class InterfaceApp:
             def on_add(sel):
                 x, y = sel.target
                 sel.annotation.set_text(f"x: {x:.4f}\ny: {y:.4f}")
+
+            # Botões extras no final da janela
+            button_frame = tk.Frame(scroll_frame)
+            button_frame.pack(pady=10)
+
+            def atualizar_status(status):
+                self.db_manager.update_status_cp(arquivo_selecionado, status)
+                messagebox.showinfo("Sucesso", f"Status do arquivo '{arquivo_selecionado}' atualizado para '{status}'.")
+                graph_window.destroy()
+
+            tk.Button(
+                button_frame,
+                text="Configurar Escalas",
+                command=lambda: self.configurar_escalas(fig, axs),
+                width=20
+            ).pack(side="left", padx=5)
+
+            tk.Button(
+                button_frame,
+                text="Aprovado",
+                command=lambda: atualizar_status('Aprovado'),
+                width=20
+            ).pack(side="left", padx=5)
+
+            tk.Button(
+                button_frame,
+                text="Refugado",
+                command=lambda: atualizar_status('Refugado'),
+                width=20
+            ).pack(side="left", padx=5)
+
+            tk.Button(button_frame, text="Sair", command=graph_window.destroy, width=20).pack(side="left", padx=5)
+
+        except KeyError as e:
+            messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
+
 
             def atualizar_status(status):
                 self.db_manager.update_status_cp(arquivo_selecionado, status)
@@ -1229,17 +1327,25 @@ class InterfaceApp:
 
     # Funções de Plotagem de Gráficos Unificadas
     def plotar_graficos_amostra(self, amostra_selecionada):
+        """
+        Obtém múltiplos arquivos associados à amostra selecionada,
+        filtra pelo intervalo de cisalhamento, e plota diversos gráficos
+        comparando cada arquivo em um único subplot.
+        """
         try:
+            # 1) Quais arquivos (filenames) estão selecionados?
             selected_files = [filename for filename, var in self.selected_files_var.items() if var.get()]
             if not selected_files:
                 messagebox.showerror("Erro", "Nenhum arquivo selecionado para plotar.")
                 return
 
+            # 2) Buscar dados no banco
             data = self.db_manager.get_data_for_files(selected_files)
             if not data:
                 messagebox.showinfo("Informação", "Nenhum dado encontrado para os arquivos selecionados.")
                 return
 
+            # 3) Agrupar dados por arquivo
             data_by_file = {}
             for row in data:
                 arquivo = row['NomeCompleto']
@@ -1247,42 +1353,48 @@ class InterfaceApp:
                     data_by_file[arquivo] = []
                 data_by_file[arquivo].append(row)
 
+            # 4) Para cada arquivo, criar DataFrame e filtrar cisalhamento
+            import pandas as pd
             datasets = {}
 
             for arquivo, rows in data_by_file.items():
                 metadados = self.db_manager.get_metadata_for_file(arquivo)
 
-                # Usar valores padrão se os metadados estiverem vazios
+                # Se não houver metadados, usar defaults
                 if not metadados:
-                    metadados_dict = {"Cisalhamento": 8, "Adensamento": 7, "B": 5}
+                    # Exemplo: default 8~11
+                    cis_inicial = 8
+                    cis_final   = 11
                 else:
-                    metadados_dict = {key: value for key, value in metadados.items()}
-
-                # Conversão segura dos metadados com valores padrão
-                try:
-                    cisalhamento_stage = int(float(metadados_dict.get("Cisalhamento", 8)))
-                    adensamento_stage = int(float(metadados_dict.get("Adensamento", 7)))
-                    b_stage = int(float(metadados_dict.get("B", 5)))
-                except ValueError as ve:
-                    messagebox.showerror("Erro", f"Erro ao converter metadados para inteiros no arquivo '{arquivo}': {ve}")
-                    continue
+                    # Tentar ler do dicionário
+                    try:
+                        cis_inicial = int(float(metadados.get("Cisalhamento Inicial", 8)))
+                        cis_final   = int(float(metadados.get("Cisalhamento Final", 8)))
+                    except ValueError:
+                        # Se der erro, usar valores padrão
+                        cis_inicial = 8
+                        cis_final   = 11
 
                 df = pd.DataFrame(rows)
 
                 numeric_columns = [
                     'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
-                    'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B', 'ax_strain',
-                    'vol_strain', 'du_kpa', 'm_A', 'm_B', 'stage_no'
+                    'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B',
+                    'ax_strain', 'vol_strain', 'du_kpa', 'm_A', 'm_B', 'stage_no'
                 ]
                 for col in numeric_columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-                # Filtrar os dados para o estágio de cisalhamento usando np.isclose
-                df_cisalhamento = df[np.isclose(df['stage_no'], cisalhamento_stage, atol=0.01)]
-
-                # Se não houver dados para o estágio de cisalhamento, adicionar um DataFrame vazio
+                # Filtrar intervalos
+                df_cisalhamento = df[
+                    (df['stage_no'] >= cis_inicial) &
+                    (df['stage_no'] <= cis_final)
+                ]
                 if df_cisalhamento.empty:
-                    messagebox.showwarning("Aviso", f"Arquivo '{arquivo}': Nenhum dado encontrado para o estágio de cisalhamento. Será usado um DataFrame vazio.")
+                    messagebox.showwarning(
+                        "Aviso",
+                        f"Arquivo '{arquivo}': Nenhum dado no intervalo {cis_inicial}–{cis_final}. Usando DF vazio."
+                    )
                     datasets[arquivo] = pd.DataFrame(columns=numeric_columns)
                 else:
                     datasets[arquivo] = df_cisalhamento
@@ -1291,16 +1403,11 @@ class InterfaceApp:
                 messagebox.showinfo("Informação", "Nenhum dado encontrado para os arquivos selecionados.")
                 return
 
-            # Plotagem dos gráficos
-            num_plots = 6
-            cols = 3
-            rows = num_plots // cols + int(num_plots % cols > 0)
+            # 5) Plotar todos os datasets no mesmo conjunto de subplots
+            import mplcursors
+            import matplotlib.pyplot as plt
 
-            fig, axs = plt.subplots(rows, cols, figsize=(18, 6 * rows))
-            axs = axs.flatten()
-
-            artists = []
-
+            # Se quiser, pode alterar quantos gráficos serão feitos
             plots = [
                 ('void_ratio_A', 'eff_camb_A'),
                 ('void_ratio_B', 'eff_camb_B'),
@@ -1310,22 +1417,35 @@ class InterfaceApp:
                 ('nqp_B', 'ax_strain'),
             ]
 
+            num_plots = len(plots)
+            cols = 3
+            rows = num_plots // cols + int(num_plots % cols > 0)
+            fig, axs = plt.subplots(rows, cols, figsize=(18, 6 * rows))
+            axs = axs.flatten()
+
+            artists = []
+
             for idx, (y_col, x_col) in enumerate(plots):
                 ax = axs[idx]
                 for arquivo, df_cisalhamento in datasets.items():
                     if not df_cisalhamento.empty:
-                        sc = ax.scatter(df_cisalhamento[x_col], df_cisalhamento[y_col], picker=True, label=arquivo)
+                        sc = ax.scatter(
+                            df_cisalhamento[x_col],
+                            df_cisalhamento[y_col],
+                            picker=True,
+                            label=arquivo
+                        )
                         artists.append(sc)
                 ax.set_xlabel(x_col)
                 ax.set_ylabel(y_col)
-                ax.set_title(f'{y_col} x {x_col}')
+                ax.set_title(f"{y_col} x {x_col}")
 
-            for idx in range(len(plots), len(axs)):
-                fig.delaxes(axs[idx])
+            for i in range(num_plots, len(axs)):
+                fig.delaxes(axs[i])
 
             plt.tight_layout()
 
-            # Janela de gráficos com barra de rolagem
+            # 6) Criar janela Tk com barra de rolagem
             graph_window = tk.Toplevel(self.root)
             graph_window.title(f"Gráficos da Amostra {amostra_selecionada}")
             graph_window.geometry("1280x960")
@@ -1343,6 +1463,8 @@ class InterfaceApp:
             scroll_y.pack(side="right", fill="y")
             scroll_x.pack(side="bottom", fill="x")
 
+            from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+
             canvas_plot = FigureCanvasTkAgg(fig, master=scroll_frame)
             canvas_plot.draw()
             canvas_plot.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -1352,24 +1474,27 @@ class InterfaceApp:
             canvas_plot.get_tk_widget().pack()
 
             cursor = mplcursors.cursor(artists, hover=True)
-
             @cursor.connect("add")
             def on_add(sel):
                 x, y = sel.target
                 sel.annotation.set_text(f"x: {x:.4f}\ny: {y:.4f}")
 
-            # Botões na parte inferior da janela
+            # Botões extras
             button_frame = tk.Frame(scroll_frame)
             button_frame.pack(pady=10)
 
-            tk.Button(button_frame, text="Configurar Escalas", command=lambda: self.configurar_escalas(fig, axs), width=20).pack(side="left", padx=10)
-            tk.Button(button_frame, text="Filtrar Arquivos", command=lambda: self.filtrar_arquivos(graph_window, amostra_selecionada), width=20).pack(side="left", padx=10)
-            tk.Button(button_frame, text="Sair", command=graph_window.destroy, width=20).pack(side="right", padx=10)
+            tk.Button(button_frame, text="Configurar Escalas",
+                    command=lambda: self.configurar_escalas(fig, axs), width=20).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Filtrar Arquivos",
+                    command=lambda: self.filtrar_arquivos(graph_window, amostra_selecionada), width=20).pack(side="left", padx=10)
+            tk.Button(button_frame, text="Sair",
+                    command=graph_window.destroy, width=20).pack(side="right", padx=10)
 
         except KeyError as e:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
         except Exception as e:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
+
 
     def gerar_planilha_cliente_screen(self):
         self.clear_screen()
@@ -1591,12 +1716,14 @@ class InterfaceApp:
         else:
             messagebox.showerror("Erro", "Login e senha são obrigatórios!")
 
+    # interface.py
+    # Certifique-se de que a chamada para get_all_users está correta no método manage_users_screen
 
     def manage_users_screen(self):
         self.clear_screen()
         self.root.title("Gerenciar Usuários")
 
-        users = self.db_manager.get_all_users()  
+        users = self.db_manager.get_all_users()  # Certifique-se de que este método existe
         if not users:
             messagebox.showinfo("Informação", "Nenhum usuário encontrado.")
             self.create_main_menu()
@@ -1631,6 +1758,20 @@ class InterfaceApp:
     def clear_screen(self):
         for widget in self.root.winfo_children():
             widget.destroy()
+
+
+import os
+import sys
+
+def resource_path(relative_path):
+    """Obtém o caminho absoluto para um recurso, funcionando tanto no desenvolvimento quanto no PyInstaller."""
+    try:
+        # PyInstaller cria uma pasta temporária e armazena o caminho em _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 
 if __name__ == "__main__":
     print("ABRIU APLICAÇÃO")

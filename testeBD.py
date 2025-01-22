@@ -9,6 +9,7 @@ import numpy as np
 # Exemplo de conversão segura para float
 ###############################################################################
 def safe_float_conversion(value, default=0.0):
+    """Faz cast seguro para float; caso falhe, retorna 'default'."""
     try:
         return float(value)
     except (ValueError, TypeError):
@@ -16,15 +17,20 @@ def safe_float_conversion(value, default=0.0):
 
 ###############################################################################
 # Mapeamento de Metadados (Nome Legível -> Nome Abreviado/Coluna no BD)
+# Observação: B, Adensamento, Cisalhamento => _B, _ad, _cis
 ###############################################################################
 METADADOS_MAPPING = {
     # Contrato, Campanha, Amostra
     "Job reference:": "idcontrato",
     "Borehole:": "idcampanha",
     "Sample Name:": "idamostra",
+
+    # B, Adensamento, Cisalhamento => underline
     "B": "_B",
     "Adensamento": "_ad",
-    "Cisalhamento": "_cis",
+    "Cisalhamento Inicial": "_cis_inicial",
+    "Cisalhamento Final": "_cis_final",
+
     "Volume de umidade médio INICIAL": "w_0",
     "Volume de umidade médio FINAL": "w_f",
     "Initial Height (mm)": "h_init",
@@ -222,6 +228,7 @@ class DatabaseManager:
                 """)
 
                 # Tabela CP
+                # Correção 1: cp e repeticao => TEXT
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS Cp (
                         idnome INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -245,12 +252,15 @@ class DatabaseManager:
                 """)
 
                 # Tabela MetadadosArquivo
+                # Correção 2: remover colunas B, Adensamento, Cisalhamento sem underline
+                # Mantemos apenas _B, _ad, _cis
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS MetadadosArquivo (
                         idnome INTEGER PRIMARY KEY,
                         _B TEXT,
                         _ad TEXT,
-                        _cis TEXT,
+                        _cis_inicial TEXT,  
+                        _cis_final TEXT,    
                         w_0 REAL,
                         w_f REAL,
                         h_init REAL,
@@ -441,6 +451,7 @@ class DatabaseManager:
                 """)
 
                 # GranulometriaA
+                # Correção 3: idensaio como PK + FOREIGN KEY
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS GranulometriaA (
                         idensaio INTEGER PRIMARY KEY,
@@ -449,6 +460,7 @@ class DatabaseManager:
                 """)
 
                 # GranulometriaCP
+                # Correção 4: idnome como PK + FOREIGN KEY
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS GranulometriaCP (
                         idnome INTEGER PRIMARY KEY,
@@ -837,76 +849,84 @@ class DatabaseManager:
     # save_to_database
     ##########################################################################
     def save_to_database(self, metadados, df_to_save, filename):
+        import traceback
+        import numpy as np
+        import re
+
+        cursor = self.conn.cursor()
+
+        def safe_str(value):
+            if isinstance(value, bytes):
+                try:
+                    return value.decode('utf-8').strip()
+                except UnicodeDecodeError:
+                    return ""
+            return str(value).strip() if value is not None else ""
+
+        def convert_numpy_types(value):
+            if isinstance(value, (np.float64, np.float32)):
+                return float(value)
+            elif isinstance(value, (np.int64, np.int32)):
+                return int(value)
+            elif isinstance(value, bytes):
+                try:
+                    return value.decode('utf-8').strip()
+                except UnicodeDecodeError:
+                    return ""
+            else:
+                return value
+
         try:
-            cursor = self.conn.cursor()
-
-            # Funções auxiliares para conversão segura
-            def safe_str(value):
-                """Converte o valor para string, retornando uma string vazia se for None."""
-                if isinstance(value, bytes):
-                    try:
-                        return value.decode('utf-8').strip()
-                    except UnicodeDecodeError:
-                        return ""
-                return str(value).strip() if value is not None else ""
-
-            def convert_numpy_types(value):
-                """Converte tipos NumPy para tipos nativos do Python."""
-                if isinstance(value, (np.float64, np.float32)):
-                    return float(value)
-                elif isinstance(value, (np.int64, np.int32)):
-                    return int(value)
-                elif isinstance(value, bytes):
-                    try:
-                        return value.decode('utf-8').strip()
-                    except UnicodeDecodeError:
-                        return ""
+            # -------------------------------------------------------------------
+            # Caso não exista "sequencial", tentar extrair de "Description of Sample:"
+            # Forçar '00' se não encontrar, para evitar erro de "sequencial está vazio"
+            desc_value = str(metadados.get("Description of Sample:", "")).strip()
+            if not metadados.get("sequencial"):
+                match_desc = re.match(r"(\d+)[Ss](\d+)", desc_value)
+                if match_desc:
+                    metadados["sequencial"] = match_desc.group(2)
                 else:
-                    return value
+                    metadados["sequencial"] = "00"
 
-            # Extrair campos necessários
-            idcontrato = metadados.get("idcontrato", "")
-            idcampanha = metadados.get("idcampanha", "")
-            idamostra  = metadados.get("idamostra", "")
+            # -------------------------------------------------------------------
+            # Campos principais
+            idcontrato  = metadados.get("idcontrato", "")
+            idcampanha  = metadados.get("idcampanha", "")
+            idamostra   = metadados.get("idamostra", "")
+            idtipoensaio = metadados.get("idtipoensaio", 0)  # int
 
-            # Obter 'idtipoensaio' como inteiro
-            idtipoensaio = metadados.get("idtipoensaio", 0)  # Já é int
-
-            # Obter 'sequencial', 'cp' e 'repeticao' como strings usando a função auxiliar
+            # Ajustar sequencial, cp, repeticao
             sequencial = safe_str(metadados.get("sequencial", ""))
-            cp_str = safe_str(metadados.get("cp", ""))
-            rep_str = safe_str(metadados.get("repeticao", ""))
+            cp_str     = safe_str(metadados.get("cp", ""))
+            rep_str    = safe_str(metadados.get("repeticao", ""))
 
-            # Convertendo valores NumPy e bytes no dicionário metadados
+            # Converter possíveis tipos em metadados
             for key in metadados:
                 metadados[key] = convert_numpy_types(metadados[key])
 
-            #logging.info(f"Processando arquivo '{filename}'...")
-            #logging.debug(f"metadados = {metadados}")
-
-            # Validação dos campos obrigatórios
+            # -------------------------------------------------------------------
+            # Validações obrigatórias
             if not idcontrato:
                 raise ValueError("idcontrato está vazio.")
             if not idcampanha:
                 raise ValueError("idcampanha está vazio.")
             if not idamostra:
                 raise ValueError("idamostra está vazio.")
-            if not sequencial:
+            if sequencial == "":
                 raise ValueError("sequencial está vazio.")
             if not cp_str:
                 raise ValueError("cp está vazio.")
             if not rep_str:
                 raise ValueError("repeticao está vazio.")
 
-            tipo_num = idtipoensaio if idtipoensaio else 0
-
-            # Verificar se 'idtipoensaio' existe na tabela TipoEnsaio
+            tipo_num = int(idtipoensaio) if idtipoensaio else 0
             if not self.is_tipo_ensaio_valid(tipo_num):
-                tipo_num = 0  # Definir como 'UNKNOWN' se não for válido
+                tipo_num = 0
                 if not self.is_tipo_ensaio_valid(tipo_num):
                     raise ValueError("TipoEnsaio inválido e 'UNKNOWN' não encontrado.")
 
-            # Inserir Contrato/Campanha/Amostra
+            # -------------------------------------------------------------------
+            # Inserir Contrato / Campanha / Amostra
             cursor.execute("INSERT OR IGNORE INTO Contrato (idcontrato) VALUES (?)", (idcontrato,))
             cursor.execute("""
                 INSERT OR IGNORE INTO Campanha (idcontrato, idcampanha)
@@ -923,7 +943,6 @@ class DatabaseManager:
                 VALUES (?,?,?,?)
             """, (idcontrato, idcampanha, idamostra, tipo_num))
             idensaio = cursor.lastrowid
-            #logging.info(f"Ensaio criado: idensaio={idensaio}.")
 
             # Criar Cp
             cursor.execute("""
@@ -931,14 +950,23 @@ class DatabaseManager:
                     idcontrato, idcampanha, idamostra, idtipoensaio, idensaio,
                     sequencial, cp, repeticao, filename, status
                 ) VALUES (?,?,?,?,?,?,?,?,?,'NV')
-            """, (idcontrato, idcampanha, idamostra, tipo_num,
-                idensaio, sequencial, cp_str, rep_str, filename))
+            """, (
+                idcontrato,
+                idcampanha,
+                idamostra,
+                tipo_num,
+                idensaio,
+                sequencial.zfill(2),
+                cp_str,
+                rep_str,
+                filename
+            ))
             idnome = cursor.lastrowid
-            #logging.info(f"Cp criado: idnome={idnome}.\n")
 
-            # Inserir MetadadosArquivo
+            # -------------------------------------------------------------------
+            # Preparar metadados para MetadadosArquivo
             metadados_columns = [
-                "_B","_ad","_cis",
+                "_B","_ad","_cis_inicial","_cis_final",
                 "w_0","w_f","h_init","d_init","ram_diam","spec_grav",
                 "idcontrato","idcampanha","idamostra","depth","samp_date","tipo",
                 "init_mass","init_dry_mass","spec_grav_assmeas","date_test_started","date_test_finished",
@@ -955,16 +983,17 @@ class DatabaseManager:
                 "consolidated_area","camb_p_A0","camb_p_B0"
             ]
 
-            # Montar dicionário para MetadadosArquivo
             metadados_db = {}
             for legivel, abv in METADADOS_MAPPING.items():
-                val = metadados.get(abv, None)
-                metadados_db[abv] = val
+                if abv != "idtipoensaio":
+                    metadados_db[abv] = metadados.get(abv, None)
 
-            # Inserir MetadadosArquivo
-            col_join = ", ".join(["idnome"] + metadados_columns)
+            metadados_db["sequencial"] = sequencial.zfill(2)
+
+            col_join     = ", ".join(["idnome"] + metadados_columns)
             placeholders = ", ".join(["?"] * (1 + len(metadados_columns)))
-            vals = [idnome]
+            vals         = [idnome]
+
             for col in metadados_columns:
                 vals.append(metadados_db.get(col, None))
 
@@ -972,9 +1001,7 @@ class DatabaseManager:
                 INSERT INTO MetadadosArquivo ({col_join})
                 VALUES ({placeholders})
             """, vals)
-            #logging.info(f"MetadadosArquivo inserido para idnome={idnome}.\n")
 
-            # Inserir dados de EnsaiosTriaxiais
             inserted_rows = 0
             ensaios_columns = df_to_save.columns.tolist()
             ensaios_columns_with_id = ["idnome"] + ensaios_columns
@@ -983,7 +1010,6 @@ class DatabaseManager:
 
             for _, row_data in df_to_save.iterrows():
                 row_list = list(row_data.values)
-                # Converter possíveis tipos NumPy dentro do DataFrame
                 row_list = [convert_numpy_types(val) for val in row_list]
                 insert_data = [idnome] + row_list
                 cursor.execute(f"""
@@ -992,24 +1018,29 @@ class DatabaseManager:
                 """, insert_data)
                 inserted_rows += 1
 
-            #logging.info(f"Inseridos {inserted_rows} registros em EnsaiosTriaxiais p/ '{filename}'.")
+            # inserir estágios cisalhamento
+            for stage_no in range(8, 12):
+                cursor.execute("""
+                    INSERT INTO EnsaiosTriaxiais (idnome, stage_no)
+                    VALUES (?, ?)
+                """, (idnome, stage_no))
+                inserted_rows += 1
 
-            # Salvar Granulometria se existirem
             if "granA_data" in metadados:
                 self.save_granulometriaA(idensaio, metadados["granA_data"])
             if "granCP_data" in metadados:
                 self.save_granulometriaCP(idnome, metadados["granCP_data"])
 
             self.conn.commit()
-            #logging.info("Salvo no banco de dados com sucesso.\n")
+            print("Salvo no banco de dados com sucesso.")
 
         except sqlite3.IntegrityError as e:
             if "UNIQUE constraint failed: Cp.filename" in str(e):
-                #logging.error(f"Erro ao salvar no banco: {str(e)}")
+                print(f"Erro ao salvar no banco: {str(e)}")
                 traceback.print_exc()
             else:
-                #logging.error(f"Erro ao salvar no banco: {str(e)}")
+                print(f"Erro ao salvar no banco: {str(e)}")
                 traceback.print_exc()
         except Exception as e:
-            #logging.error(f"Erro ao salvar no banco: {str(e)}")
+            print(f"Erro ao salvar no banco de dados: {e}")
             traceback.print_exc()
