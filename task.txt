@@ -1,3 +1,14 @@
+Informações importantes:
+
+Dispositivos TpLink 10 Total
+2- adensamento (lab07)
+2- triaxial (lab05)
+1- pc server
+
+
+
+TASKS:
+
 fiz uma alteração no arquivo modelo, adicionando além da pagina modelo 'Report', adicionei 'ModeloIndividual', essa pagina tem que ser preenchida com informações do banco de dados, nas células especificas, pois elas são cálculos pré-definidos,
 fazer duplicação da pagina 'ModeloIndividual' no arquivo modelo e preencher as seguintes celulas dos seguintes estagios(os estagios sao dinamicos, o valor de B ,adensamento e cisalhamento foram definidos e salvos no banco de dados):
 B--- somente o stage do valor de B----(não precisa preencher pois ja esta nomeado na pagina ModeloIndividual) 
@@ -460,5 +471,14 @@ Criar novo código chamado teste4, novo mapeamento de novas colunas e criar cál
             }
 
 
-			preciso criar uma rede local, tenho rotiadores Deco da Tplink configuradas, e computadores clientes que vão salvar os arquivos da pasta do fluxo 'Encontrar Arquivos', preciso configurar corretamente a rede a pasta que ficará localizada no pc servidor, onde quando eu rodar a aplicação vai buscar os arquivos para salvar no banco nessa pasta. 
-a pasta compartilhada precisa estar configurada levando em consideração que a rede decoAdm está em uma rede privada e os pcs clientes precisam salvar o arquivo nessa pasta para encontrar os arquivos com a aplicação e salvar no banco de dados
+			
+preciso criar uma rede local, tenho rotiadores Deco da Tplink configuradas, e computadores clientes que vão salvar os arquivos da pasta do fluxo 'Encontrar Arquivos',
+preciso configurar corretamente a rede a pasta que ficará localizada no pc servidor, onde quando eu rodar a aplicação vai buscar os arquivos para salvar no banco nessa pasta. 
+a pasta compartilhada precisa estar configurada levando em consideração que a rede decoAdm está em uma rede privada
+e os pcs clientes precisam salvar o arquivo nessa pasta para encontrar os arquivos com a aplicação e salvar no banco de dados
+
+ARQUIVO .GDS TRIAXIAL, MAPEAMENTO COLUNAS:
+Criar novo botão, Encontrar Arquivos Triaxial Cíclico em interface.py
+Criar lógica de tratamento do arquivo, identificando corretamente a sequencia dos arquivos alterando a coluna de stage_no,(selecionar primeiro arquivo, selecionar segundo arquivo, selecionar terceiro arquivo)
+Criar nova tabela no banco de dados EnsaioCíclico, com as seguintes colunas mapeadas em TesteBD
+Criar novo código chamado teste4, novo mapeamento de novas colunas e criar cálculos de cada coluna tratada, utilizando os mesmos calculos portanto nomeando
