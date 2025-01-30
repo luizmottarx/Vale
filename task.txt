@@ -482,3 +482,64 @@ Criar novo botão, Encontrar Arquivos Triaxial Cíclico em interface.py
 Criar lógica de tratamento do arquivo, identificando corretamente a sequencia dos arquivos alterando a coluna de stage_no,(selecionar primeiro arquivo, selecionar segundo arquivo, selecionar terceiro arquivo)
 Criar nova tabela no banco de dados EnsaioCíclico, com as seguintes colunas mapeadas em TesteBD
 Criar novo código chamado teste4, novo mapeamento de novas colunas e criar cálculos de cada coluna tratada, utilizando os mesmos calculos portanto nomeando
+
+ARQUIVO .GDS TRIAXIAL, MAPEAMENTO COLUNAS:
+Criar novo botão, Encontrar Arquivos Triaxial Cíclico em interface.py
+Criar lógica de tratamento do arquivo, identificando corretamente a sequencia dos arquivos alterando a coluna de stage_no,(selecionar primeiro arquivo, selecionar segundo arquivo, selecionar terceiro arquivo)
+Criar nova tabela no banco de dados EnsaioCíclico, com as seguintes colunas mapeadas
+Criar novo código chamado teste4, novo mapeamento de novas colunas e criar cálculos de cada coluna tratada, (calcular método A?)
+
+
+m_B =DEGREES(ASIN((3*[@[nqp_A]])/(6+[@[nqp_A]])))
+m_A =DEGREES(ASIN((3*[@[nqp_B]])/(6+[@[nqp_B]])))
+nqp_B =[@[dev_stress_B]]/[@[eff_camb_B]]
+nqp_A =[@[dev_stress_A]]/[@[eff_camb_A]]
+du_kpa_B =[@[max_shear_stress_B]]/camp_p_B
+du_kpa_A =[@[max_shear_stress_A]]/camp_p_A
+excessPWP = [@[pore_press_Original]]-[@[back_press]]
+b_val = IF([@[stage_no]]=_B,(rad_press_0-[@[rad_press]]/pore_press_0-[@[pore_press_Original]]),"-")
+avg_eff_stress_B=([@[eff_ax_stress_B]] + [@[eff_rad_stress]]) / 2
+avg_eff_stress_A=([@[eff_ax_stress_A]] + [@[eff_rad_stress]]) / 2
+avg_mean_stress =([@[ax_stress]]+[@[rad_press]])/2
+max_shear_stress_B=[@[dev_stress_B]]/2
+max_shear_stress_A=[@[dev_stress_A]]/2
+eff_camb_A= ([@[eff_rad_stress]]+[@[eff_rad_stress]]+[@[eff_ax_stress_A]])/3
+eff_camb_B= ([@[eff_rad_stress]]+[@[eff_rad_stress]]+[@[eff_ax_stress_B]])/3
+camb_p_B= ((([@[ax_stress]]-[@[dev_stress_B]])*2) + [@[ax_stress]]) / 3
+camb_p_A= ((([@[ax_stress]]-[@[dev_stress_A]])* 2) + [@[ax_stress]])/3
+shear_strain= ([@[ax_strain]]-[@[vol_strain]])*2/3
+eff_stress_rat_B= [@[eff_ax_stress_B]]/[@[eff_rad_stress]]
+eff_stress_rat_A= [@[eff_ax_stress_A]]/[@[eff_rad_stress]]
+dev_stress_B = [@load_cell_Original]/([@[cur_area_B]]/100000)
+dev_stress_A = [@load_cell_Original]/([@[cur_area_A]]/100000)
+eff_rad_stress = [@[rad_press]] - [@[pore_press_Original]]
+eff_ax_stress_B= [@[dev_stress_B]]+[@[eff_rad_stress]]
+eff_ax_stress_A= [@[dev_stress_A]]+[@[eff_rad_stress]]
+ax_stress = IF([@[stage_no]]<_cis, h_init_c/h_init , h_init_c - h_init/h_init)
+vol_strain = IF([@[stage_no]]<_cis,([@[back_vol]])/(v_0),(-[@[back_vol]]+back_vol_c)/(v_c_B))
+ax_strain = IF([@[stage_no]]<_cis,[@[ax_disp]]/(h_init),((-ax_disp_c)+[@[ax_disp]])/(h_init-[@[ax_disp]]))
+load = load_cell_Original
+void_ratio_B =([@[vol_B]] -vol_solid) / vol_solid
+void_ratio_A =([@[vol_A]] -vol_solid) / vol_solid
+vol_B = IF([@[stage_no]] < _cis,  (v_0 - ( [@[back_vol]])),  (v_c_B - (  [@[back_vol]] - back_vol_c)))
+vol_A =IF([@[stage_no]] < _cis,  (v_0 - ( [@[back_vol]] )),  (v_c_A - ([@[back_vol]])))
+height = h_init - [@[ax_disp]]
+rad_strain_B =([@[diameter_B]] - d_init)/d_init
+rad_strain_A =([@[diameter_A]] - d_init)/d_init
+diameter_B = 2 * SQRT([@[cur_area_B]]/ PI())
+diameter_A = 2 * SQRT([@[cur_area_A]]/ PI())
+cur_area_B = IF([@[stage_no]]<_cis, [@[vol_B]]/[@height], consolidated_area * ((1-[@[vol_strain]])/( 1 -[@[ax_strain]])))
+cur_area_A =[@[vol_A]]/[@height]
+ax_disp_delta =IF([@[time_test_start]]=0,0,K64-K63)
+ax_disp =IF([@[time_test_start]]=0,0,(AL64+AK63))
+back_vol =IF([@[time_test_start]]=0,0,(AI64+AJ63))
+back_vol_delta =IF([@[time_test_start]]=0,[@[back_vol_Original]],H64 - H63)
+back_press =([@[back_press_Original]])
+rad_press =([@[rad_press_Original]])
+rad_vol =IF([@[time_test_start]]=0,0,(AE64+AF63))
+rad_vol_delta =IF([@[time_test_start]]=0,[@[rad_vol_Original]],F64 - F63)
+ax_force = load_cell_Original
+
+
+
+
