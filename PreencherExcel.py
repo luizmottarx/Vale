@@ -12,7 +12,6 @@ def safe_float_conversion(value):
     except (ValueError, TypeError):
         return 0.0
 
-# PreencherExcel.py
 def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado, metodo):
     # Determinar o modelo de planilha com base no TipoEnsaio
     if tipo_ensaio_selecionado.startswith('TIR'):
@@ -89,7 +88,8 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
         try:
             B_stage = int(metadados['_B'])
             Adensamento_stage = int(metadados['_ad'])
-            Cisalhamento_stage = int(metadados['_cis'])
+            cis_inicial = int(metadados['_cis_inicial'])
+            cis_final = int(metadados['_cis_final'])
         except KeyError as e:
             print(f"Estágio '{e.args[0]}' não encontrado nos metadados do arquivo {arquivo}.")
             continue
@@ -122,9 +122,16 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
 
         B_data = get_stage_data(B_stage)
         adensamento_data = get_stage_data(Adensamento_stage)
-        cisalhamento_data = get_stage_data(Cisalhamento_stage)
 
-        if not B_data or not adensamento_data or not cisalhamento_data:
+        # Filtrar dados de cisalhamento entre cis_inicial e cis_final
+        cis_indices = [i for i, val in enumerate(data_dict['stage_no']) if cis_inicial <= val <= cis_final]
+        if not cis_indices:
+            print(f"Nenhum dado de cisalhamento encontrado para os estágios {cis_inicial} a {cis_final} no arquivo {arquivo}")
+            continue
+
+        cis_data = {col: [data_dict[col][i] for i in cis_indices] for col in colunas}
+
+        if not B_data or not adensamento_data or not cis_data:
             print(f"Dados incompletos para o arquivo {arquivo}")
             continue
 
@@ -150,26 +157,24 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
                 sheet.cell(row=7 + idx_row, column=ad_column_indices[idx_col], value=value)
 
         # Preencher dados do estágio de Cisalhamento
-        cis_rows = len(cisalhamento_data.get('stage_no', []))
-
         # Calcular pore_press_0 como o primeiro valor de pore_press_Original no estágio de cisalhamento
-        pore_press_0 = cisalhamento_data.get('pore_press_Original', [0])[0]
+        pore_press_0 = cis_data.get('pore_press_Original', [0])[0]
 
         # Calcular eff_rad_stress = rad_press_Original - pore_press_Original
         eff_rad_stress = [rad_p - pore_p for rad_p, pore_p in zip(
-            cisalhamento_data.get('rad_press_Original', []),
-            cisalhamento_data.get('pore_press_Original', [])
+            cis_data.get('rad_press_Original', []),
+            cis_data.get('pore_press_Original', [])
         )]
 
         # Calcular eff_ax_stress_B = dev_stress_B + eff_rad_stress
-        dev_stress_B = cisalhamento_data.get('dev_stress_B', [])
+        dev_stress_B = cis_data.get('dev_stress_B', [])
         eff_ax_stress_B = [dev + eff_rad for dev, eff_rad in zip(dev_stress_B, eff_rad_stress)]
 
         # Calcular stress_ratio = eff_ax_stress_B / eff_rad_stress
         stress_ratio = [ea / er if er != 0 else None for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
 
         # Calcular pore_press_diff = pore_press_Original - pore_press_0
-        pore_press_diff = [pp - pore_press_0 for pp in cisalhamento_data.get('pore_press_Original', [])]
+        pore_press_diff = [pp - pore_press_0 for pp in cis_data.get('pore_press_Original', [])]
 
         # Calcular eff_stress_avg = (eff_ax_stress_B + eff_rad_stress)/2
         eff_stress_avg = [(ea + er)/2 for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
@@ -178,7 +183,7 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
         eff_stress_diff = [(ea - er)/2 for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
 
         # Ajustar back_vol_Original subtraindo o primeiro valor no estágio
-        back_vol_Original = cisalhamento_data.get('back_vol_Original', [])
+        back_vol_Original = cis_data.get('back_vol_Original', [])
         if back_vol_Original:
             first_back_vol_Original = back_vol_Original[0]
             adjusted_back_vol_Original = [value - first_back_vol_Original for value in back_vol_Original]
@@ -186,7 +191,7 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
             adjusted_back_vol_Original = []
 
         # Ajustar ax_disp_Original subtraindo o primeiro valor no estágio
-        ax_disp_Original = cisalhamento_data.get('ax_disp_Original', [])
+        ax_disp_Original = cis_data.get('ax_disp_Original', [])
         if ax_disp_Original:
             first_ax_disp_Original = ax_disp_Original[0]
             adjusted_ax_disp_Original = [value - first_ax_disp_Original for value in ax_disp_Original]
@@ -194,21 +199,21 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
             adjusted_ax_disp_Original = []
 
         # Utilizar ax_strain sem multiplicar por 100
-        ax_strain_percent = cisalhamento_data.get('ax_strain', [])
+        ax_strain_percent = cis_data.get('ax_strain', [])
 
         # Calcular Corrected Deviator Stress (q) = dev_stress_B
         corrected_deviator_stress = dev_stress_B
 
         # Preparar dados para preenchimento
-        cis_data = {
-            'time_stage_start': cisalhamento_data.get('time_stage_start', []),
-            'time_stage_start_div_60': [t / 60 for t in cisalhamento_data.get('time_stage_start', [])],
-            'rad_press_Original': cisalhamento_data.get('rad_press_Original', []),
-            'back_press_Original': cisalhamento_data.get('back_press_Original', []),
-            'pore_press_Original': cisalhamento_data.get('pore_press_Original', []),
+        cis_data_preenchimento = {
+            'time_stage_start': cis_data.get('time_stage_start', []),
+            'time_stage_start_div_60': [t / 60 for t in cis_data.get('time_stage_start', [])],
+            'rad_press_Original': cis_data.get('rad_press_Original', []),
+            'back_press_Original': cis_data.get('back_press_Original', []),
+            'pore_press_Original': cis_data.get('pore_press_Original', []),
             'adjusted_back_vol_Original': adjusted_back_vol_Original,
             'adjusted_ax_disp_Original': adjusted_ax_disp_Original,
-            'load_cell_Original': cisalhamento_data.get('load_cell_Original', []),
+            'load_cell_Original': cis_data.get('load_cell_Original', []),
             'ax_strain_percent': ax_strain_percent,
             'corrected_deviator_stress': corrected_deviator_stress,
             'stress_ratio': stress_ratio,
@@ -236,12 +241,12 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
         ]
         cis_column_indices = [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]  # R(18) a AE(31)
 
-        cis_rows_to_fill = len(cis_data['time_stage_start'])
+        cis_rows_to_fill = len(cis_data_preenchimento['time_stage_start'])
 
         # Preencher os dados nas células especificadas
         for idx_row in range(cis_rows_to_fill):
             for idx_col, col_name in enumerate(cis_column_names):
-                value_list = cis_data[col_name]
+                value_list = cis_data_preenchimento[col_name]
                 if idx_row < len(value_list):
                     value = value_list[idx_row]
                 else:
