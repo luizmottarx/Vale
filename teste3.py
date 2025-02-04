@@ -1,10 +1,11 @@
-# teste3.py
-
 import os
 import pandas as pd
 import numpy as np
 from testeBD import safe_float_conversion
 
+###############################################################################
+# Função auxiliar para divisão segura
+###############################################################################
 def safe_divide(numerator, denominator, default_value=0.0):
     """Divisão segura, evitando ZeroDivisionError."""
     try:
@@ -12,10 +13,25 @@ def safe_divide(numerator, denominator, default_value=0.0):
     except:
         return default_value
 
-# -----------------------------------------------------------
+###############################################################################
+# Função para encontrar, dinamicamente, a linha dos cabeçalhos no arquivo `.gds`
+###############################################################################
+def find_header_line(gds_file):
+    """
+    Percorre o arquivo e retorna o índice (0-based) da linha em que o cabeçalho
+    começa, procurando o texto 'Stage Number' como referência.
+    """
+    with open(gds_file, 'r', encoding='latin-1') as file:
+        for i, line in enumerate(file):
+            # Se esta linha contiver 'Stage Number', assumimos ser o cabeçalho.
+            if "Stage Number" in line:
+                return i
+    return None  # Caso não encontre, retorna None
+
+###############################################################################
 # Classe que realiza cálculos a partir de Adensamento e Cisalhamento
 # Agora usando um intervalo: _cis_inicial e _cis_final
-# -----------------------------------------------------------
+###############################################################################
 class METADADOS_PARTE2:
     def __init__(self, df, metadados, init_dry_mass, v_0, vol_solid, v_w_f, h_init):
         """
@@ -27,13 +43,6 @@ class METADADOS_PARTE2:
         v_w_f         = volume de água final
         h_init        = altura inicial
         """
-
-        # Função local de divisão segura
-        def safe_div(numerator, denominator, default_value=0):
-            try:
-                return numerator / denominator if denominator != 0 else default_value
-            except ZeroDivisionError:
-                return default_value
 
         # ------------------------------------------------------------
         # 1) Ler metadados já mapeados
@@ -207,9 +216,9 @@ class METADADOS_PARTE2:
         return vars(self)
 
 
-# ------------------------------------------------------------
+###############################################################################
 # Classe para dados de Cisalhamento, agora lendo range
-# ------------------------------------------------------------
+###############################################################################
 class CisalhamentoData:
     def __init__(self, df, metadados):
         """
@@ -275,29 +284,29 @@ class CisalhamentoData:
         }
 
 
-# ------------------------------------------------------------
+###############################################################################
 # Classe TableProcessor: lê o .gds e prepara df + metadados
-# ------------------------------------------------------------
-import os
-import pandas as pd
-import numpy as np
-from testeBD import safe_float_conversion
-from teste3 import safe_divide  # Caso esteja em outro lugar, adapte o import
-
-# ------------------------------------------------------------
-# Classe TableProcessor: lê o .gds e prepara df + metadados
-# ------------------------------------------------------------
+# Agora com leitura dinâmica do cabeçalho
+###############################################################################
 class TableProcessor:
     @staticmethod
     def process_table_data(db_manager, metadados, gds_file):
         """
-        Lê o arquivo .gds, faz rename de colunas pelo NOME do cabeçalho,
-        realiza cálculos e retorna df + metadados_parte2 atualizados.
+        Lê o arquivo .gds, encontra dinamicamente o cabeçalho com 'Stage Number',
+        faz rename de colunas pelo NOME do cabeçalho, realiza cálculos
+        e retorna df + metadados_parte2 atualizados.
         """
-
         try:
-            # 1) Ler .gds, ignorando as 57 linhas iniciais
-            df = pd.read_csv(gds_file, encoding='latin-1', skiprows=57) #verificar linha especificada
+            # 1) Encontrar linha do cabeçalho dinamicamente
+            from teste3 import find_header_line  # Caso esteja no mesmo arquivo, pode remover esse import
+            header_line = find_header_line(gds_file)
+            if header_line is None:
+                raise ValueError(
+                    f"Cabeçalho com 'Stage Number' não encontrado em {gds_file}."
+                )
+
+            # 2) Ler o arquivo a partir da linha correta dos cabeçalhos
+            df = pd.read_csv(gds_file, encoding='latin-1', skiprows=header_line)
             # Remover espaços extras do cabeçalho
             df = df.rename(columns=lambda x: x.strip())
 
@@ -354,7 +363,7 @@ class TableProcessor:
             if missing_cols:
                 raise ValueError(f"Colunas faltantes: {missing_cols}")
 
-            # 2) Converter colunas numéricas
+            # 3) Converter colunas numéricas
             numeric_columns = [
                 "rad_press_Original",
                 "rad_vol_Original",
@@ -367,7 +376,7 @@ class TableProcessor:
             ]
             df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
 
-            # 3) Obter valores iniciais do dicionário metadados
+            # 4) Obter valores iniciais do dicionário metadados
             w_0        = safe_float_conversion(metadados.get('w_0', 0))
             w_f        = safe_float_conversion(metadados.get('w_f', 0))
             init_mass  = safe_float_conversion(metadados.get('init_mass', 0))
@@ -380,7 +389,7 @@ class TableProcessor:
             vol_solid     = (init_dry_mass * 1000) / spec_grav if spec_grav != 0 else 0
             v_w_f         = w_f * init_dry_mass * 1000
 
-            # 4) Ajustar colunas derivadas
+            # 5) Ajustar colunas derivadas
             df['ax_force'] = df['load_cell_Original']
             df['load']     = df['load_cell_Original']
 
@@ -408,15 +417,14 @@ class TableProcessor:
                 df['vol_A'] / df['height'].replace(0, np.nan)
             ) * 1e-6
 
-            # 5) Instanciar METADADOS_PARTE2
-            # (Classe que faz os cálculos adicionais)
+            # 6) Instanciar METADADOS_PARTE2 (Classe que faz os cálculos adicionais)
             from teste3 import METADADOS_PARTE2
             metadados_parte2 = METADADOS_PARTE2(
                 df, metadados,
                 init_dry_mass, v_0, vol_solid, v_w_f, h_init
             )
 
-            # 6) Ajustar colunas de deformação e tensão
+            # 7) Ajustar colunas de deformação e tensão
             Cisalhamento_stage = int(metadados.get("Cisalhamento", 8))  # se ainda precisar do 'Cisalhamento'
             df['ax_strain'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
@@ -555,7 +563,7 @@ class TableProcessor:
             df_to_save = df[columns_to_save].copy()
             df_to_save = df_to_save.apply(pd.to_numeric, errors='coerce').fillna(0.0)
 
-            # 7) Atualizar metadados com valores do METADADOS_PARTE2
+            # 8) Atualizar metadados com valores do METADADOS_PARTE2
             metadados['dry_unit_weight']  = metadados_parte2.dry_unit_weight
             metadados['init_void_ratio']  = metadados_parte2.init_void_ratio
             metadados['init_sat']         = metadados_parte2.init_sat
