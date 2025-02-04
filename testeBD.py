@@ -5,7 +5,7 @@ import pandas as pd
 import traceback
 import numpy as np
 
-###############################################################################
+
 # Exemplo de conversão segura para float
 ###############################################################################
 def safe_float_conversion(value, default=0.0):
