@@ -57,12 +57,12 @@ class METADADOS_PARTE2:
         self.Saturacao_c = safe_float_conversion(metadados.get('Saturacao_c', 1))
 
         # Estágios
-        self.B           = int(metadados.get("B", 5))
-        self.Adensamento = int(metadados.get("Adensamento", 7))
+        self.B           = int(metadados.get("B", 1))
+        self.Adensamento = int(metadados.get("Adensamento", 1))
 
         # Agora buscamos _cis_inicial e _cis_final
-        self.CisalhamentoInicial = int(metadados.get("_cis_inicial", 8))
-        self.CisalhamentoFinal   = int(metadados.get("_cis_final", 8))
+        self.CisalhamentoInicial = int(metadados.get("_cis_inicial", 1))
+        self.CisalhamentoFinal   = int(metadados.get("_cis_final", 1))
 
         self.fin_mass     = safe_float_conversion(metadados.get("fin_mass", 0))
         self.fin_dry_mass = safe_float_conversion(metadados.get("fin_dry_mass", 0))
