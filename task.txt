@@ -480,14 +480,31 @@ e os pcs clientes precisam salvar o arquivo nessa pasta para encontrar os arquiv
 ARQUIVO .GDS TRIAXIAL, MAPEAMENTO COLUNAS:
 Criar novo botão, Encontrar Arquivos Triaxial Cíclico em interface.py
 Criar lógica de tratamento do arquivo, identificando corretamente a sequencia dos arquivos alterando a coluna de stage_no,(selecionar primeiro arquivo, selecionar segundo arquivo, selecionar terceiro arquivo)
-Criar nova tabela no banco de dados EnsaioCíclico, com as seguintes colunas mapeadas em TesteBD
-Criar novo código chamado teste4, novo mapeamento de novas colunas e criar cálculos de cada coluna tratada, utilizando os mesmos calculos portanto nomeando
 
-ARQUIVO .GDS TRIAXIAL, MAPEAMENTO COLUNAS:
-Criar novo botão, Encontrar Arquivos Triaxial Cíclico em interface.py
-Criar lógica de tratamento do arquivo, identificando corretamente a sequencia dos arquivos alterando a coluna de stage_no,(selecionar primeiro arquivo, selecionar segundo arquivo, selecionar terceiro arquivo)
-Criar nova tabela no banco de dados EnsaioCíclico, com as seguintes colunas mapeadas
-Criar novo código chamado teste4, novo mapeamento de novas colunas e criar cálculos de cada coluna tratada, (calcular método A?)
+motivo da lógica: no ensaio triaxial cíclico, acontece que o equipamento nao consegue gerar somente um arquivo com o mesmo ensaio, e nisso, é gerado varios arquivos para o mesmo ensaio .gds. portanto altera,
+a geração dos arquivos retornando do zero o estagio do ensaio o stage_no.
+
+o usuario precisa escolher dentre os arquivos .gds encontrados na pasta, e ordenar esses arquivos . o arquivo 1 (nao vai ser alterado) o arquivo 2 precisa continuar o arquivo 1 , ignorando os metadados e iterando as 
+linhas em sequencia, dessas linhas em sequencia preciso alterar a coluna de stage_no, exemplo o primeiro arquivo finaliza o ensaio com o stage = 6 o arquivo 2 vai começar o estagio = 7 e assim por diante, vai somar o 
+valor encontrado na linha + o numero 6 que é o ultimo stage do primeiro arquivo, ou seja o segundo stage do segundo arquivo vai ser o 2 + 6 = 8, o primeiro vai ser 1 +6 =7.
+
+o terceiro arquivo vai ser a mesma logica com o primeiro e segundo arquivo, portanto vai ser com o ultimo stage do segundo arquivo + o valor do stage
+
+nao sei quantos arquivos esse ensaio ciclico vai ter , entao cada tela de adicionar arquivos vao ter 3 botoes, 'voltar' (para o arquivo anterior), 'salvar no banco'(para salvar os arquivos escolhidos),'adicionar arquivo em :'nome do primeiro arquivo''
+(abrir opções para escolher qual o proximo arquivo).
+precisa salvar um id de arquivo após o usuario salvar 
+
+nesses arquivos ciclicos é a mesma modelagem do banco de dados que ja esta corretamente sendo utilizada pelo meu codigo e salvando corretamente no banco de dados
+
+
+a função de selecionar os arquivos tem que ser da mesma pasta especificada, do fluxo de encontrar arquivos. selecionar o primeiro arquivo, na mesma janela selecionar o segundo, terceiro ,quarto até quanto o usuario quiser 
+e depois que o usuario clicar em salvar no banco que vai abrir o primeiro arquivo selecionado e editar os metadados lidos, somente do primeiro arquivo, os metadados dos arquivos seguintes ignorar. depois que fizer essa 
+concatenação dos arquivos, editar o metadado do primeiro arquivo que a aplicação tenta salvar no banco
+
+
+
+
+
 
 
 m_B =DEGREES(ASIN((3*[@[nqp_A]])/(6+[@[nqp_A]])))
