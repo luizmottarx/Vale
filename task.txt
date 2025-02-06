@@ -496,16 +496,24 @@ precisa salvar um id de arquivo após o usuario salvar
 
 nesses arquivos ciclicos é a mesma modelagem do banco de dados que ja esta corretamente sendo utilizada pelo meu codigo e salvando corretamente no banco de dados
 
-
 a função de selecionar os arquivos tem que ser da mesma pasta especificada, do fluxo de encontrar arquivos. selecionar o primeiro arquivo, na mesma janela selecionar o segundo, terceiro ,quarto até quanto o usuario quiser 
 e depois que o usuario clicar em salvar no banco que vai abrir o primeiro arquivo selecionado e editar os metadados lidos, somente do primeiro arquivo, os metadados dos arquivos seguintes ignorar. depois que fizer essa 
 concatenação dos arquivos, editar o metadado do primeiro arquivo que a aplicação tenta salvar no banco
 
+o fluxo do usuario tem que funcionar na seguinte forma: clicar em salvar ensaios ciclico, em seguida selecionar o primeiro arquivo, nesse primeiro arquivo vai ser o ponto inicial para junção dos arquivos 
+a ideia é juntar os arquivos apatir do primeiro arquivo iterando a continução da coluna stage_no, preciso ir mostrando para o usuario quando for adicionando cada arquivo o ultimo stage_no que foi somado por exemplo 
+primeiro arquivo adicionado, ultimo stage = 6, segundo arquivo adicionado ultimo stage 20. 
+quando o usuario tiver escolhido todos os arquivos  de sua escolha e clicar em salvar , vai abrir a tela de edição dos metadados do primeiro arquivo, ele vai ser o metadado de todos os arquivos escolhidos, pois vao ser 
+um arquivo somente, o usuario antes de salvar no banco precisa editar os metadados para caber na minha modelagem dos dados, para concluir todos os arquivos escolhidos vao se tornar somente 1 id no meu banco, somente um arquivo
+com os metadados do primeiro arquivo escolhiho.
+
+agora preciso ajustar o processamento do dado antes de salvar.
+a ideia de juntar todos os arquivos esta funcionando corretamente, portanto os calculos realizados no teste3 precisam ser feitos depois que o arquivo unico for juntado. incluindo os calculos iniciais e as colunas calculadas.
+antes de processar o calculo primeiro tenho que escolher os arquivos desejados, editar o metadado do primeiro arquivo da ordem, e depois calcular com os valores editados do metadado 
 
 
-
-
-
+os arquivos esta sendo juntado corretamente no mesmo id e salvando no banco dados. portanto a lógica do codigo teste3 junto com essa funcionalidade nao esta correta, os calculos estão incorretos  e salvando 
+as colunas calculadas no teste3 zeradas. a lógica do fluxo é fazer os calculos somente após o usuario editar os metadados do primeiro arquivo e clicar em salvar.
 
 m_B =DEGREES(ASIN((3*[@[nqp_A]])/(6+[@[nqp_A]])))
 m_A =DEGREES(ASIN((3*[@[nqp_B]])/(6+[@[nqp_B]])))
