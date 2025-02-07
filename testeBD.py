@@ -30,7 +30,7 @@ METADADOS_MAPPING = {
     "Adensamento": "_ad",
     "Cisalhamento Inicial": "_cis_inicial",
     "Cisalhamento Final": "_cis_final",
-
+    "Sequencial": "sequencial",
     "Volume de umidade médio INICIAL": "w_0",
     "Volume de umidade médio FINAL": "w_f",
     "Initial Height (mm)": "h_init",
@@ -967,7 +967,7 @@ class DatabaseManager:
             # Preparar metadados para MetadadosArquivo
             metadados_columns = [
                 "_B","_ad","_cis_inicial","_cis_final",
-                "w_0","w_f","h_init","d_init","ram_diam","spec_grav",
+                "w_0","w_f","h_init","d_init","sequencial","ram_diam","spec_grav",
                 "idcontrato","idcampanha","idamostra","depth","samp_date","tipo",
                 "init_mass","init_dry_mass","spec_grav_assmeas","date_test_started","date_test_finished",
                 "spec_type","top_drain","base_drain","side_drains","fin_mass","fin_dry_mass",
