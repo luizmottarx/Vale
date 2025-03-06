@@ -35,7 +35,7 @@ def find_header_line(gds_file):
 class METADADOS_PARTE2:
     def __init__(self, df, metadados, init_dry_mass, v_0, vol_solid, v_w_f, h_init):
         """
-        df            = DataFrame lido e renomeado
+        df            = DataFrame lido e renomeado (ou unificado)
         metadados     = dicionário com metadados
         init_dry_mass = massa seca inicial
         v_0           = volume inicial
@@ -170,7 +170,6 @@ class METADADOS_PARTE2:
         # ------------------------------------------------------------
         # 7) Cálculo de variação volumétrica no cisalhamento (range)
         # ------------------------------------------------------------
-        # Intervalo: [CisalhamentoInicial, CisalhamentoFinal]
         cis_stage_data = df[
             (df['stage_no'] >= self.CisalhamentoInicial) &
             (df['stage_no'] <= self.CisalhamentoFinal)
@@ -217,7 +216,7 @@ class METADADOS_PARTE2:
 
 
 ###############################################################################
-# Classe para dados de Cisalhamento, agora lendo range
+# Classe para dados de Cisalhamento
 ###############################################################################
 class CisalhamentoData:
     def __init__(self, df, metadados):
@@ -283,10 +282,8 @@ class CisalhamentoData:
             "m_B":            self.m_B,
         }
 
-
 ###############################################################################
-# Classe TableProcessor: lê o .gds e prepara df + metadados
-# Agora com leitura dinâmica do cabeçalho
+# Classe TableProcessor
 ###############################################################################
 class TableProcessor:
     @staticmethod
@@ -295,22 +292,19 @@ class TableProcessor:
         Lê o arquivo .gds, encontra dinamicamente o cabeçalho com 'Stage Number',
         faz rename de colunas pelo NOME do cabeçalho, realiza cálculos
         e retorna df + metadados_parte2 atualizados.
+        (Fluxo "Encontrar Arquivos": processa diretamente do arquivo)
         """
         try:
-            # 1) Encontrar linha do cabeçalho dinamicamente
-            from teste3 import find_header_line  # Caso esteja no mesmo arquivo, pode remover esse import
+            # 1) Encontrar a linha do cabeçalho
             header_line = find_header_line(gds_file)
             if header_line is None:
-                raise ValueError(
-                    f"Cabeçalho com 'Stage Number' não encontrado em {gds_file}."
-                )
+                raise ValueError(f"Cabeçalho com 'Stage Number' não encontrado em {gds_file}.")
 
-            # 2) Ler o arquivo a partir da linha correta dos cabeçalhos
+            # 2) Ler o CSV a partir da linha do cabeçalho
             df = pd.read_csv(gds_file, encoding='latin-1', skiprows=header_line)
-            # Remover espaços extras do cabeçalho
-            df = df.rename(columns=lambda x: x.strip())
+            df = df.rename(columns=lambda x: x.strip())  # Remover espaços extras
 
-            # **MAPEAMENTO POR NOME**: Ajuste aqui conforme os nomes exatos do .gds
+            # Mapeamento de cabeçalhos
             header_mapping = {
                 "Stage Number":                "stage_no",
                 "Time since start of test (s)": "time_test_start",
@@ -341,42 +335,28 @@ class TableProcessor:
                 "B Value":                     "b_value_Original",
                 "Mean Stress s/Eff. Axial Stress 2": "mean_stress_Original"
             }
-
-            # Renomear efetivamente as colunas que forem encontradas
             df.rename(columns=header_mapping, inplace=True)
 
-            # Verificar colunas que são obrigatórias para continuar
-            required_columns = [
-                "stage_no",
-                "time_test_start",
-                "time_stage_start",
-                "rad_press_Original",
-                "rad_vol_Original",
-                "back_press_Original",
-                "back_vol_Original",
-                "load_cell_Original",
-                "pore_press_Original",
-                "ax_disp_Original",
-                "ax_force_Original"
+            # Verificar colunas obrigatórias
+            required_cols = [
+                "stage_no","time_test_start","time_stage_start",
+                "rad_press_Original","rad_vol_Original","back_press_Original",
+                "back_vol_Original","load_cell_Original","pore_press_Original",
+                "ax_disp_Original","ax_force_Original"
             ]
-            missing_cols = [col for col in required_columns if col not in df.columns]
+            missing_cols = [c for c in required_cols if c not in df.columns]
             if missing_cols:
                 raise ValueError(f"Colunas faltantes: {missing_cols}")
 
             # 3) Converter colunas numéricas
             numeric_columns = [
-                "rad_press_Original",
-                "rad_vol_Original",
-                "back_press_Original",
-                "back_vol_Original",
-                "load_cell_Original",
-                "pore_press_Original",
-                "ax_disp_Original",
-                "ax_force_Original"
+                "rad_press_Original","rad_vol_Original","back_press_Original",
+                "back_vol_Original","load_cell_Original","pore_press_Original",
+                "ax_disp_Original","ax_force_Original"
             ]
             df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
 
-            # 4) Obter valores iniciais do dicionário metadados
+            # 4) Obter valores de metadados (massa seca etc.)
             w_0        = safe_float_conversion(metadados.get('w_0', 0))
             w_f        = safe_float_conversion(metadados.get('w_f', 0))
             init_mass  = safe_float_conversion(metadados.get('init_mass', 0))
@@ -417,15 +397,15 @@ class TableProcessor:
                 df['vol_A'] / df['height'].replace(0, np.nan)
             ) * 1e-6
 
-            # 6) Instanciar METADADOS_PARTE2 (Classe que faz os cálculos adicionais)
+            # 6) Instanciar METADADOS_PARTE2
             from teste3 import METADADOS_PARTE2
             metadados_parte2 = METADADOS_PARTE2(
                 df, metadados,
                 init_dry_mass, v_0, vol_solid, v_w_f, h_init
             )
 
-            # 7) Ajustar colunas de deformação e tensão
-            Cisalhamento_stage = int(metadados.get("Cisalhamento", 8))  # se ainda precisar do 'Cisalhamento'
+            # 7) Ajustar colunas de deformação/tensão
+            Cisalhamento_stage = int(metadados.get("Cisalhamento", 8))
             df['ax_strain'] = np.where(
                 df['stage_no'] < Cisalhamento_stage,
                 df['ax_disp'] / h_init,
@@ -587,4 +567,200 @@ class TableProcessor:
 
         except Exception as e:
             print(f"Erro ao processar o arquivo '{gds_file}': {e}")
+            return None
+
+    @staticmethod
+    def process_table_data_from_dataframe(db_manager, metadados, df):
+        """
+        Processa um DataFrame em memória (já concatenado), replicando
+        a mesma lógica de transformações de 'process_table_data',
+        porém usando _cis_inicial e _cis_final ao invés de 'Cisalhamento'.
+        """
+        try:
+            # Copia o DataFrame original para evitar modificar df externo
+            df = df.copy()
+
+            # 1) Ler valores essenciais do dicionário de metadados
+            w_0       = safe_float_conversion(metadados.get('w_0', 0))
+            w_f       = safe_float_conversion(metadados.get('w_f', 0))
+            init_mass = safe_float_conversion(metadados.get('init_mass', 0))
+            h_init    = safe_float_conversion(metadados.get('h_init', 1))
+            d_init    = safe_float_conversion(metadados.get('d_init', 1))
+            spec_grav = safe_float_conversion(metadados.get('spec_grav', 1))
+
+            # Calcula massa seca inicial, volume inicial, etc.
+            init_dry_mass = init_mass / (1 + w_0) if (1 + w_0) != 0 else 0
+            v_0           = h_init * np.pi * (d_init ** 2) / 4
+            vol_solid     = (init_dry_mass * 1000) / spec_grav if spec_grav != 0 else 0
+            v_w_f         = w_f * init_dry_mass * 1000
+
+            # 2) Converter colunas necessárias (caso existam)
+            needed_cols = [
+                "rad_press_Original","rad_vol_Original","back_press_Original",
+                "back_vol_Original","load_cell_Original","pore_press_Original",
+                "ax_disp_Original","ax_force_Original"
+            ]
+            for col in needed_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                else:
+                    # Se a coluna não existir, criamos com zero
+                    df[col] = 0.0
+
+            # 3) Ajuste de colunas derivadas
+            df['ax_force'] = df['load_cell_Original']
+            df['load']     = df['load_cell_Original']
+
+            df['rad_vol_delta']  = df['rad_vol_Original'].diff().fillna(0)
+            df['rad_vol_cumsum'] = df['rad_vol_delta'].cumsum()
+            df['rad_vol']        = df['rad_vol_cumsum']
+
+            df['rad_press'] = df['rad_press_Original']
+            df['back_press']= df['back_press_Original']
+
+            df['back_vol_delta']  = df['back_vol_Original'].diff().fillna(0)
+            df['back_vol_cumsum'] = df['back_vol_delta'].cumsum()
+            df['back_vol']        = df['back_vol_cumsum']
+
+            df['ax_disp_delta']   = df['ax_disp_Original'].diff().fillna(0)
+            df['ax_disp_cumsum']  = df['ax_disp_delta'].cumsum()
+            df['ax_disp']         = df['ax_disp_cumsum']
+
+            # Altura do corpo de prova a cada instante
+            df['height'] = h_init - df['ax_disp']
+
+            # Volume "A" e "B" (depende do estágio, mas no mínimo iniciamos assim)
+            df['vol_A'] = v_0 - df['back_vol']
+            df['vol_B'] = v_0 - df['back_vol']
+
+            # Área "A" (corrente)
+            df['cur_area_A'] = (
+                df['vol_A'] / df['height'].replace(0, np.nan)
+            ) * 1e-6
+
+            # 4) Instanciar o METADADOS_PARTE2, que faz vários cálculos
+            cis_parte2 = METADADOS_PARTE2(df, metadados, init_dry_mass, v_0, vol_solid, v_w_f, h_init)
+
+            # 5) Agora sim calculamos colunas de deformação/tensão, usando _cis_inicial/_cis_final
+            #    Precisamos converter esses valores do dicionário:
+            cis_inicial = int(metadados.get("_cis_inicial", 8))
+            cis_final   = int(metadados.get("_cis_final", 8))
+
+            # a) Deformação axial
+            #    Se "stage_no" < cis_inicial => axial strain = ax_disp / h_init (adensamento)
+            #    Se "stage_no" >= cis_inicial => axial strain relativo ao fim do adensamento
+            df['ax_strain'] = np.where(
+                df['stage_no'] < cis_inicial,
+                df['ax_disp'] / h_init,
+                (df['ax_disp'] - cis_parte2.ax_disp_c) /
+                (h_init - df['ax_disp']).replace(0, np.nan)
+            ) * 100
+
+            # b) Tensão axial (kPa)
+            df['ax_stress'] = df['load'] / df['cur_area_A'].replace(0, np.nan)
+
+            # c) Deformação volumétrica
+            #    - Antes do cisalhamento => vol_strain = (back_vol / v_0)
+            #    - Depois => (cis_parte2.back_vol_c - back_vol) / (cis_parte2.cons_void_vol + vol_solid)
+            df['vol_strain'] = np.where(
+                df['stage_no'] < cis_inicial,
+                df['back_vol'] / v_0,
+                (cis_parte2.back_vol_c - df['back_vol']) /
+                (cis_parte2.cons_void_vol + vol_solid)
+            ) * 100
+
+            # d) Dev. Stress A, Dev. Stress B, etc.
+            #    Precisamos de 'dev_stress_A' = load / área_A - radial (ou outro critério).
+            #    No exemplo do "estático" a gente fez:
+            #       df['dev_stress_A'] = df['load'] / df['cur_area_A']
+            #       df['dev_stress_B'] = df['load'] / df['cur_area_B'] (caso "B" seja calculado).
+            #    E a tensão radial efetiva = df['rad_press_Original'] - df['pore_press_Original'], etc.
+            df['eff_rad_stress'] = df['rad_press_Original'] - df['pore_press_Original']
+            df['dev_stress_A']   = df['load'] / df['cur_area_A'].replace(0, np.nan)
+            # Se quiser calcular 'cur_area_B', teria de replicar a lógica do outro method
+            # Aqui, como simplificado, definimos 'dev_stress_B' igual a dev_stress_A ou algo similar:
+            df['dev_stress_B']   = df['dev_stress_A']  # Exemplo simples
+
+            # Exemplo de su_A, su_B
+            df['su_A'] = df['dev_stress_A'] / 2
+            df['su_B'] = df['dev_stress_B'] / 2
+
+            # e) void_ratio_A e void_ratio_B
+            df['void_ratio_A'] = np.where(
+                vol_solid != 0,
+                (df['vol_A'] - vol_solid) / vol_solid,
+                0
+            )
+            df['void_ratio_B'] = np.where(
+                vol_solid != 0,
+                (df['vol_B'] - vol_solid) / vol_solid,
+                0
+            )
+
+            # f) Pressão cambridge etc.
+            df['eff_ax_stress_A'] = df['dev_stress_A'] + df['eff_rad_stress']
+            df['eff_ax_stress_B'] = df['dev_stress_B'] + df['eff_rad_stress']
+
+            df['eff_camb_A'] = (df['eff_rad_stress'] * 2 + df['eff_ax_stress_A']) / 3
+            df['eff_camb_B'] = (df['eff_rad_stress'] * 2 + df['eff_ax_stress_B']) / 3
+
+            df['nqp_A'] = df['dev_stress_A'] / df['eff_camb_A'].replace(0, np.nan)
+            df['nqp_B'] = df['dev_stress_B'] / df['eff_camb_B'].replace(0, np.nan)
+
+            df['m_A'] = np.degrees(
+                np.arcsin(((3 * df['nqp_A']) / (6 + df['nqp_A'])).clip(-1, 1))
+            )
+            df['m_B'] = np.degrees(
+                np.arcsin(((3 * df['nqp_B']) / (6 + df['nqp_B'])).clip(-1, 1))
+            )
+
+            # g) Excesso de poro (por ex. do cis_inicial)
+            cis_stage_data = df[df['stage_no'] == cis_inicial]
+            if not cis_stage_data.empty:
+                pore_press_cis_first = cis_stage_data['pore_press_Original'].iloc[0]
+                df['du_kpa'] = df['pore_press_Original'] - pore_press_cis_first
+            else:
+                df['du_kpa'] = 0
+
+            # 6) Definir colunas a salvar no DF final
+            columns_to_save = [
+                'stage_no','rad_press_Original','rad_vol_Original','back_press_Original','back_vol_Original',
+                'load_cell_Original','pore_press_Original','ax_disp_Original','ax_force_Original',
+                'ax_disp','rad_press','back_press','back_vol','vol_A','vol_B','cur_area_A',
+                'ax_stress','ax_strain','vol_strain',
+                'dev_stress_A','dev_stress_B','su_A','su_B',
+                'void_ratio_A','void_ratio_B','eff_rad_stress',
+                'eff_ax_stress_A','eff_ax_stress_B','eff_camb_A','eff_camb_B',
+                'nqp_A','nqp_B','m_A','m_B','du_kpa'
+            ]
+            for col in columns_to_save:
+                if col not in df.columns:
+                    df[col] = 0.0
+
+            df_to_save = df[columns_to_save].copy()
+            df_to_save = df_to_save.fillna(0.0)
+
+            # 7) Atualizar metadados com valores do METADADOS_PARTE2
+            metadados['dry_unit_weight'] = cis_parte2.dry_unit_weight
+            metadados['init_void_ratio'] = cis_parte2.init_void_ratio
+            metadados['init_sat']        = cis_parte2.init_sat
+            metadados['post_cons_void']  = cis_parte2.post_cons_void
+
+            all_attrs = cis_parte2.get_all_attributes()
+            already_assigned = {'dry_unit_weight','init_void_ratio','init_sat','post_cons_void'}
+            for attr, value in all_attrs.items():
+                if attr not in already_assigned:
+                    metadados[attr] = value
+
+            # Depurar no console (opcional)
+            cis_parte2.print_attributes()
+
+            # 8) Retornar o dicionário com DataFrame final + metadados
+            return {
+                'df': df_to_save,
+                'metadados_parte2': cis_parte2
+            }
+
+        except Exception as e:
+            print(f"Erro em process_table_data_from_dataframe: {e}")
             return None
