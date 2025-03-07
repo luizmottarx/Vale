@@ -568,3 +568,11 @@ ax_force = load_cell_Original
 
 
 
+corrigir arquivamento de ensaios ciclicos
+corrigir metodo A e validar metodo B
+
+testar nova rede (dois computadores, um para o usuario, um para servidor)
+
+segue o exemplo de arquivamento do banco de dados com calculos:
+foi escolhido 3 arquivos sendo o primeiro escolhido o primeiro arquivo que vai ser utilizado os seus metadados, que foram editados por mim
+
