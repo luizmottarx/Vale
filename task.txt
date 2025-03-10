@@ -576,3 +576,5 @@ testar nova rede (dois computadores, um para o usuario, um para servidor)
 segue o exemplo de arquivamento do banco de dados com calculos:
 foi escolhido 3 arquivos sendo o primeiro escolhido o primeiro arquivo que vai ser utilizado os seus metadados, que foram editados por mim
 
+função que precisa de correção é finish_and_save em interface.py
+
