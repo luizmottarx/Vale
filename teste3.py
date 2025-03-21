@@ -29,20 +29,9 @@ def find_header_line(gds_file):
     return None  # Caso não encontre, retorna None
 
 ###############################################################################
-# Classe que realiza cálculos a partir de Adensamento e Cisalhamento
-# Agora usando um intervalo: _cis_inicial e _cis_final
-###############################################################################
+# Classe para metadados da Parte 2
 class METADADOS_PARTE2:
     def __init__(self, df, metadados, init_dry_mass, v_0, vol_solid, v_w_f, h_init):
-        """
-        df            = DataFrame lido e renomeado (ou unificado)
-        metadados     = dicionário com metadados
-        init_dry_mass = massa seca inicial
-        v_0           = volume inicial
-        vol_solid     = volume de sólidos
-        v_w_f         = volume de água final
-        h_init        = altura inicial
-        """
 
         # ------------------------------------------------------------
         # 1) Ler metadados já mapeados
@@ -288,12 +277,7 @@ class CisalhamentoData:
 class TableProcessor:
     @staticmethod
     def process_table_data(db_manager, metadados, gds_file):
-        """
-        Lê o arquivo .gds, encontra dinamicamente o cabeçalho com 'Stage Number',
-        faz rename de colunas pelo NOME do cabeçalho, realiza cálculos
-        e retorna df + metadados_parte2 atualizados.
-        (Fluxo "Encontrar Arquivos": processa diretamente do arquivo)
-        """
+
         try:
             # 1) Encontrar a linha do cabeçalho
             header_line = find_header_line(gds_file)
@@ -519,21 +503,22 @@ class TableProcessor:
             df['rad_strain_B'] = ((df['diameter_B'] - d_init)/d_init) * 100
 
             columns_to_save = [
-                'stage_no','time_test_start','time_stage_start','rad_press_Original','rad_vol_Original',
-                'back_press_Original','back_vol_Original','load_cell_Original','pore_press_Original',
-                'ax_disp_Original','ax_force_Original','ax_strain_Original','avg_diam_chg_Original',
-                'rad_strain_Original','ax_strain_Original_2','eff_ax_stress_Original','eff_rad_stress_Original',
-                'dev_stress_Original','total_stress_rat_Original','eff_stress_rat_Original',
-                'cur_area_Original','shear_strain_Original','camb_p_Original','eff_camb_p_Original',
-                'max_shear_stress_Original','vol_change_Original','b_value_Original','mean_stress_Original',
-                'ax_force','load','rad_vol_delta','rad_vol','rad_press','back_press',
-                'back_vol_delta','back_vol','ax_disp_delta','ax_disp','height','vol_A','vol_B',
-                'cur_area_A','cur_area_B','eff_rad_stress','dev_stress_A','dev_stress_B',
-                'ax_stress','ax_strain','vol_strain','void_ratio_B','void_ratio_A','eff_ax_stress_A',
-                'eff_ax_stress_B','eff_stress_rat_A','eff_stress_rat_B','eff_camb_A','eff_camb_B',
-                'camb_p_A','camb_p_B','max_shear_stress_A','max_shear_stress_B','excessPWP','du_kpa',
-                'nqp_A','nqp_B','m_A','m_B','shear_strain','diameter_A','diameter_B','b_val',
-                'avg_eff_stress_A','avg_eff_stress_B','avg_mean_stress','rad_strain_A','rad_strain_B'
+                'stage_no', 'time_test_start', 'time_stage_start', 'rad_press_Original', 'rad_vol_Original',
+                'back_press_Original', 'back_vol_Original', 'load_cell_Original', 'pore_press_Original',
+                'ax_disp_Original', 'ax_force_Original', 'ax_strain_Original', 'avg_diam_chg_Original',
+                'rad_strain_Original', 'ax_strain_Original_2', 'eff_ax_stress_Original', 'eff_rad_stress_Original',
+                'dev_stress_Original', 'total_stress_rat_Original', 'eff_stress_rat_Original',
+                'cur_area_Original', 'shear_strain_Original', 'camb_p_Original', 'eff_camb_p_Original',
+                'max_shear_stress_Original', 'vol_change_Original', 'b_value_Original', 'mean_stress_Original',
+                'ax_force', 'load', 'rad_vol_delta', 'rad_vol', 'rad_press', 'back_press',
+                'back_vol_delta', 'back_vol', 'ax_disp_delta', 'ax_disp', 'height', 'vol_A', 'vol_B',
+                'cur_area_A', 'cur_area_B', 'eff_rad_stress', 'dev_stress_A', 'dev_stress_B',
+                'ax_stress', 'ax_strain', 'vol_strain', 'void_ratio_B', 'void_ratio_A', 'eff_ax_stress_A',
+                'eff_ax_stress_B', 'eff_stress_rat_A', 'eff_stress_rat_B', 'eff_camb_A', 'eff_camb_B',
+                'camb_p_A', 'camb_p_B', 'max_shear_stress_A', 'max_shear_stress_B', 'excessPWP', 'du_kpa',
+                'nqp_A', 'nqp_B', 'm_A', 'm_B', 'shear_strain', 'diameter_A', 'diameter_B', 'b_val',
+                'avg_eff_stress_A', 'avg_eff_stress_B', 'avg_mean_stress', 'rad_strain_A', 'rad_strain_B',
+                'su_A', 'su_B'
             ]
 
             missing_cols_save = [col for col in columns_to_save if col not in df.columns]
@@ -571,11 +556,7 @@ class TableProcessor:
 
     @staticmethod
     def process_table_data_from_dataframe(db_manager, metadados, df):
-        """
-        Processa um DataFrame em memória (já concatenado), replicando
-        a mesma lógica de transformações de 'process_table_data',
-        porém usando _cis_inicial e _cis_final ao invés de 'Cisalhamento'.
-        """
+
         try:
             # Copia o DataFrame original para evitar modificar df externo
             df = df.copy()
@@ -641,8 +622,7 @@ class TableProcessor:
             # 4) Instanciar o METADADOS_PARTE2, que faz vários cálculos
             cis_parte2 = METADADOS_PARTE2(df, metadados, init_dry_mass, v_0, vol_solid, v_w_f, h_init)
 
-            # 5) Agora sim calculamos colunas de deformação/tensão, usando _cis_inicial/_cis_final
-            #    Precisamos converter esses valores do dicionário:
+
             cis_inicial = int(metadados.get("_cis_inicial", 8))
             cis_final   = int(metadados.get("_cis_final", 8))
 
@@ -669,17 +649,9 @@ class TableProcessor:
                 (cis_parte2.cons_void_vol + vol_solid)
             ) * 100
 
-            # d) Dev. Stress A, Dev. Stress B, etc.
-            #    Precisamos de 'dev_stress_A' = load / área_A - radial (ou outro critério).
-            #    No exemplo do "estático" a gente fez:
-            #       df['dev_stress_A'] = df['load'] / df['cur_area_A']
-            #       df['dev_stress_B'] = df['load'] / df['cur_area_B'] (caso "B" seja calculado).
-            #    E a tensão radial efetiva = df['rad_press_Original'] - df['pore_press_Original'], etc.
             df['eff_rad_stress'] = df['rad_press_Original'] - df['pore_press_Original']
             df['dev_stress_A']   = df['load'] / df['cur_area_A'].replace(0, np.nan)
-            # Se quiser calcular 'cur_area_B', teria de replicar a lógica do outro method
-            # Aqui, como simplificado, definimos 'dev_stress_B' igual a dev_stress_A ou algo similar:
-            df['dev_stress_B']   = df['dev_stress_A']  # Exemplo simples
+            df['dev_stress_B']   = df['dev_stress_A']  
 
             # Exemplo de su_A, su_B
             df['su_A'] = df['dev_stress_A'] / 2
@@ -724,15 +696,23 @@ class TableProcessor:
 
             # 6) Definir colunas a salvar no DF final
             columns_to_save = [
-                'stage_no','rad_press_Original','rad_vol_Original','back_press_Original','back_vol_Original',
-                'load_cell_Original','pore_press_Original','ax_disp_Original','ax_force_Original',
-                'ax_disp','rad_press','back_press','back_vol','vol_A','vol_B','cur_area_A',
-                'ax_stress','ax_strain','vol_strain',
-                'dev_stress_A','dev_stress_B','su_A','su_B',
-                'void_ratio_A','void_ratio_B','eff_rad_stress',
-                'eff_ax_stress_A','eff_ax_stress_B','eff_camb_A','eff_camb_B',
-                'nqp_A','nqp_B','m_A','m_B','du_kpa'
-            ]
+                'stage_no', 'time_test_start', 'time_stage_start', 'rad_press_Original', 'rad_vol_Original',
+                'back_press_Original', 'back_vol_Original', 'load_cell_Original', 'pore_press_Original',
+                'ax_disp_Original', 'ax_force_Original', 'ax_strain_Original', 'avg_diam_chg_Original',
+                'rad_strain_Original', 'ax_strain_Original_2', 'eff_ax_stress_Original', 'eff_rad_stress_Original',
+                'dev_stress_Original', 'total_stress_rat_Original', 'eff_stress_rat_Original',
+                'cur_area_Original', 'shear_strain_Original', 'camb_p_Original', 'eff_camb_p_Original',
+                'max_shear_stress_Original', 'vol_change_Original', 'b_value_Original', 'mean_stress_Original',
+                'ax_force', 'load', 'rad_vol_delta', 'rad_vol', 'rad_press', 'back_press',
+                'back_vol_delta', 'back_vol', 'ax_disp_delta', 'ax_disp', 'height', 'vol_A', 'vol_B',
+                'cur_area_A', 'cur_area_B', 'eff_rad_stress', 'dev_stress_A', 'dev_stress_B',
+                'ax_stress', 'ax_strain', 'vol_strain', 'void_ratio_B', 'void_ratio_A', 'eff_ax_stress_A',
+                'eff_ax_stress_B', 'eff_stress_rat_A', 'eff_stress_rat_B', 'eff_camb_A', 'eff_camb_B',
+                'camb_p_A', 'camb_p_B', 'max_shear_stress_A', 'max_shear_stress_B', 'excessPWP', 'du_kpa',
+                'nqp_A', 'nqp_B', 'm_A', 'm_B', 'shear_strain', 'diameter_A', 'diameter_B', 'b_val',
+                'avg_eff_stress_A', 'avg_eff_stress_B', 'avg_mean_stress', 'rad_strain_A', 'rad_strain_B',
+                'su_A', 'su_B'
+            ]               
             for col in columns_to_save:
                 if col not in df.columns:
                     df[col] = 0.0
