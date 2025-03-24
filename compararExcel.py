@@ -1,4 +1,8 @@
 # compararExcel.py
+# PARA RODAR, DIGITAR PELO PROMPT:
+# cd C:\Users\lgv_v\Documents\LUIZ
+# streamlit run compararExcel.py
+
 
 import os
 import pandas as pd
@@ -153,6 +157,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# PARA RODAR, DIGITAR PELO PROMPT:
-# cd C:\Users\lgv_v\Documents\LUIZ
-# streamlit run compararExcel.py
