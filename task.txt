@@ -566,8 +566,6 @@ rad_vol_delta =IF([@[time_test_start]]=0,[@[rad_vol_Original]],F64 - F63)
 ax_force = load_cell_Original
 
 
-
-
 corrigir arquivamento de ensaios ciclicos
 corrigir metodo A e validar metodo B
 
@@ -578,3 +576,18 @@ foi escolhido 3 arquivos sendo o primeiro escolhido o primeiro arquivo que vai s
 
 função que precisa de correção é finish_and_save em interface.py
 
+
+21/03
+no fluxo do botao encontrar arquivos ciclicos, segue o terminal para correção, nao alterar as colunas que estão salvas corretamente, no caso todas as com _Originais que foram somente lidas no arquivo o restante das calculadas no teste3.py preciso que todas serem corretamente calculadas e salvas corretamente para correção do salvamento dessas tabelas nulas, todas as calculadas estao salvando nulas
+COMO SALVAR PLANILHA FINAL PRO CLIENTE NOS ENSAIOS CICLICOS, COMO SALVAR A QUANTIDADE GRANDE DE LINHAS E GERAR A PLANILHA CLIENTE, PRECISO RESUMIR ??
+
+
+24/03
+CORRIGIR :
+quando selecionar os 5 arquivos para gerar a planilha cliente, ao inves de buscar da pasta que contem os arquivos brutos, tem que buscar do idnome ja salvo no banco de dados
+(mostrar pelo filename para o usuario escolher).
+
+
+
+IDEIA PARA O PROPIO USUARIO FAZER A CONFERENCIA DOS ARQUIVOS:
+adicionar o codigo compararExcel.py na interface.py, o compararExcel permite o usuario selecionar dois arquivos com tipos iguais e colunas iguais traçar graficos para comparar
