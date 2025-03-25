@@ -437,6 +437,8 @@ class DatabaseManager:
                         avg_mean_stress REAL,
                         rad_strain_A REAL,
                         rad_strain_B REAL,
+                        su_A REAL,
+                        su_B REAL,
                         FOREIGN KEY (idnome) REFERENCES Cp(idnome)
                     )
                 """)
@@ -757,7 +759,6 @@ class DatabaseManager:
             traceback.print_exc()
             raise e
 
-
     def get_idnome_by_filename(self, filename):
         """
         Retorna o idnome correspondente ao filename fornecido.
@@ -1044,3 +1045,17 @@ class DatabaseManager:
         except Exception as e:
             print(f"Erro ao salvar no banco de dados: {e}")
             traceback.print_exc()
+            
+import os
+import sys
+
+def resource_path(relative_path):
+    """
+    Obtém o caminho absoluto para um recurso, tanto no desenvolvimento
+    quanto no PyInstaller.
+    """
+    try:
+        base_path = sys._MEIPASS  # Atributo definido pelo PyInstaller
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
