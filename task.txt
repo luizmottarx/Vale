@@ -595,6 +595,7 @@ AM02122-36_TIR_S_Seq.1 / Índice de Vazios: 1.4 | k=0.6 | Umidade: 10% /�
 IDEIA PARA O PROPIO USUARIO FAZER A CONFERENCIA DOS ARQUIVOS:
 adicionar o codigo compararExcel.py na interface.py, o compararExcel permite o usuario selecionar dois arquivos com tipos iguais e colunas iguais traçar graficos para comparar
 
+<<<<<<< HEAD
 
 ####Cálculos Consultas
 
@@ -665,3 +666,10 @@ rad_press =rad_press_Original
 back_press = back_press_Original
 ax_force =load_cell_Original
 
+=======
+        for idx_row in range(ad_rows):
+            for idx_col, col_name in enumerate(ad_columns):
+                value = adensamento_data.get(col_name, [])[idx_row]
+                sheet.cell(row=7 + idx_row, column=ad_column_indices[idx_col], value=value)
+corrigir PrencherExcel.py esta limitando a quantidade de linhas que estao sendo inseridas no arquivo excel apartir do banco de dados 
+>>>>>>> e47ba53f27bd73af1282efa388ec7117d0369fb4
