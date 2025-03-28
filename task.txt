@@ -585,9 +585,83 @@ COMO SALVAR PLANILHA FINAL PRO CLIENTE NOS ENSAIOS CICLICOS, COMO SALVAR A QUANT
 24/03
 CORRIGIR :
 quando selecionar os 5 arquivos para gerar a planilha cliente, ao inves de buscar da pasta que contem os arquivos brutos, tem que buscar do idnome ja salvo no banco de dados
-(mostrar pelo filename para o usuario escolher).
+(mostrar pelo filename para o usuario escolher). preciso colocar um campo de filtro para o usuario buscar o filename para gerar a planilha cliente.     okok
 
+adicionar um quadro resumo para controle do usuario. que vai conter as seguintes colunas: 
+Amostra/  Condição de moldagem/  Método de preparação/  Determinação de umidade final/  s'3/  p'0 (kPa)/  Gs / e0 / ec / ef / su/p'0 (pico)/  su/p'0 (final)  /
+AM02122-36_TIR_S_Seq.1 / Índice de Vazios: 1.4 | k=0.6 | Umidade: 10% / Moist Tamping / Adensamento e Congelamento / 653 / 799 / 3.690 / 1.404 / 0.742 / 0.596 / 0.34 / 0.26  
 
 
 IDEIA PARA O PROPIO USUARIO FAZER A CONFERENCIA DOS ARQUIVOS:
 adicionar o codigo compararExcel.py na interface.py, o compararExcel permite o usuario selecionar dois arquivos com tipos iguais e colunas iguais traçar graficos para comparar
+
+
+####Cálculos Consultas
+
+
+
+	- Considere 
+	NOVA COLUNA DE DELTA = (A2 -A1)
+	NOVO VALOR= (A2-A1) + A1
+	 sendo, as colunas com os valores brutos estão com o final _Original, e as colunas recalculadas são as abreviações
+	
+Colunas Originais : 
+stage_no	time_test_start	time_stage_start	rad_press_Original	rad_vol_Original	back_press_Original	back_vol_Original	load_cell_Original	pore_press_Original	ax_disp_Original	ax_force_Original	ax_strain_Original	avg_diam_chg_Original	rad_strain_Original	ax_strain_Original_2	eff_ax_stress_Original	eff_rad_stress_Original	dev_stress_Original	total_stress_rat_Orignal	eff_stress_rat_Original	cur_area_Original	shear_strain_Original	camp_p_Original	eff_camb_p_Original	max_shear_stress_Original	vol_change_Original	b_value_Original	mean_stress_Original
+
+
+
+
+Colunas Cálculadas:(considere que as formulas abaixo foram feitas no excel e entre os parenteses das respectivas células são a descrição da localização das mesmas)
+
+Rad_vol_delta =SE([@[time_test_start]]=0;[@[rad_vol_Original]];F64 - F63)
+Rad_vol =SE([@[time_test_start]]=0;0;(AE64+AF63))
+Back_vol_delta =SE([@[time_test_start]]=0;[@[back_vol_Original]];H64 - H63)
+Back_vol =SE([@[time_test_start]]=0;0;(AI64+AJ63))
+Ax_disp_delta=SE([@[time_test_start]]=0;0;K64-K63)
+Ax_disp=SE([@[time_test_start]]=0;0;(AL64+AK63))
+Cur_area_A =[@[vol_A]]/[@height]
+Cur_area_B = [@[vol_B]]/[@height]
+Diameter_A = 2 * RAIZ([@[cur_area_A]]/ PI())
+Diameter_B = 2 * RAIZ([@[cur_area_B]]/ PI())
+Rad_strain_A =([@[diameter_A]] - h_init)/h_init
+Rad_strain_B =([@[diameter_B]] - h_init)/h_init
+Height =h_init - [@[ax_disp]]
+Vol_A =SE([@[stage_no]] < _cis;  (v_0 - ( [@[back_vol]] ));  (v_c_A - ([@[back_vol]])))
+Vol_B =SE([@[stage_no]] < _cis;  (v_0 - ( [@[back_vol]]));  (v_c_B - (  [@[back_vol]] - back_vol_c)))
+Void_ratio_A=([@[vol_A]] -vol_solid) / vol_solid
+Void_ratio_B =([@[vol_B]] -vol_solid) / vol_solid
+Ax_strain = SE([@[stage_no]]<_cis;[@[ax_disp]]/(h_init);((-ax_disp_c)+[@[ax_disp]])/(ax_disp_c))                                     #alterado
+Vol_strain = SE([@[stage_no]]<_cis;([@[back_vol]])/(v_0);(-[@[back_vol]]+back_vol_c)/(v_c_B))
+Ax_stress = SE([@[stage_no]]<_cis;h_init_c/h_init;h_init_c - h_init/h_init)
+Eff_ax_stress_A = [@[dev_stress_A]]+[@[eff_rad_stress]]
+Eff_ax_stress_B = [@[dev_stress_B]]+[@[eff_rad_stress]]
+Eff_rad_stress =[@[rad_press]] - [@[pore_press_Original]]
+Dev_stress_A = [@load]/([@[cur_area_A]]/100000)
+Dev_stress_B = [@load]/([@[cur_area_B]]/100000)
+Eff_stress_rat_A = [@[eff_ax_stress_A]]/[@[eff_rad_stress]]
+Eff_stress_rat_B = [@[eff_ax_stress_B]]/[@[eff_rad_stress]]
+Shear_strain = ([@[ax_strain]]-[@[vol_strain]])*2/3
+Camb_p_A = (([@[ax_stress]]-[@[dev_stress_A]])*2 + [@[ax_stress]])/3
+Camb_p_B = (([@[ax_stress]]-[@[dev_stress_B]])*2 + [@[ax_stress]])/3
+Eff_camb_p_A = ([@[eff_rad_stress]]+[@[eff_rad_stress]]+[@[eff_ax_stress_A]])/3
+Eff_camb_p_B = ([@[eff_rad_stress]]+[@[eff_rad_stress]]+[@[eff_ax_stress_B]])/3
+Max_shear_stress_A= [@[dev_stress_A]]/2
+Max_shear_stress_B = [@[dev_stress_B]]/2
+Avg_mean_stress =([@[ax_stress]]+[@[rad_press]])/2
+Avg_eff_stress_A =([@[eff_ax_stress_A]] + [@[eff_rad_stress]]) / 2
+Avg_eff_stress_B =([@[eff_ax_stress_B]] + [@[eff_rad_stress]]) / 2
+b_val = SE([@[stage_no]]=_B;(rad_press_0-[@[rad_press]]/pore_press_0-[@[pore_press_Original]]);"-")
+ExcessPWP = [@[pore_press_Original]]-[@[back_press]]
+Su_A =[@[max_shear_stress_A]]  /camp_p_A
+Su_B =[@[max_shear_stress_A]]  /camp_p_B
+qpB =[@[dev_stress_B]]/[@[eff_camb_p_B]]
+qpA=[@[dev_stress_B]]/[@[eff_camb_p_A]]
+OmA =GRAUS(ASEN((3*[@[q/p''_A]])/(6+[@[q/p''_A]])))
+OmB=GRAUS(ASEN((3*[@[q/p''_A]])/(6+[@[q/p''_B]])))
+
+
+load = load_cell_Original
+rad_press =rad_press_Original
+back_press = back_press_Original
+ax_force =load_cell_Original
+
