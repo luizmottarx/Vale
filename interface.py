@@ -131,8 +131,6 @@ class InterfaceApp:
         cursor = self.db_manager.conn.execute("SELECT * FROM usuarios WHERE login = ? AND senha = ?", (user, password))
         return cursor.fetchone() is not None
 
-# No método create_main_menu da classe InterfaceApp, adicionar o novo botão
-
     def create_main_menu(self):
         self.clear_screen()
         self.root.title("Menu Principal")
@@ -149,8 +147,21 @@ class InterfaceApp:
         tk.Button(frame, text="Ver Arquivos Aprovados", command=self.ver_arquivos_aprovados, width=30).pack(pady=10)
         tk.Button(frame, text="Ver Arquivos Refugados", command=self.ver_arquivos_refugados, width=30).pack(pady=10)
         tk.Button(frame, text="Gerar Planilha Cliente", command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
+
+        # >>> NOVO BOTÃO PARA TRIAXIAL CÍCLICO <<<
+        tk.Button(
+            frame,
+            text="Encontrar Arquivos Triaxial Cíclico",
+            command=self.open_triaxial_ciclico_window,  # chama método abaixo
+            width=30
+        ).pack(pady=10)
+
         tk.Button(frame, text="Sair", command=self.root.quit, width=30).pack(pady=10)
 
+
+    def open_triaxial_ciclico_window(self):
+        # Passa self (InterfaceApp) como 'main_app'
+        TriaxialCiclicoWindow(self.root, self.db_manager, self)
 
     def ver_arquivos_aprovados(self):
         self.ver_arquivos_status_individual('Aprovado')
@@ -236,6 +247,73 @@ class InterfaceApp:
         tk.Button(button_frame, text="Avançar", command=self.select_file, width=15).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Voltar", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
 
+    def select_file_ciclico(self):
+        """
+        Equivalente ao 'select_file()' do fluxo estático, mas
+        para o primeiro arquivo do ensaio cíclico.
+        """
+        # 1) Selecionar arquivo
+        file_path = filedialog.askopenfilename(
+            title="Selecione o primeiro arquivo .gds do ensaio cíclico",
+            filetypes=[("GDS Files","*.gds")]
+        )
+        if not file_path:
+            return  # usuário cancelou
+
+        try:
+            directory = os.path.dirname(file_path)
+            # 2) Ler metadados com FileProcessor (igual fluxo estático)
+            processor = FileProcessor(directory)
+            metadados_lidos = processor.process_gds_file(file_path)
+            if not metadados_lidos:
+                raise ValueError("Nenhum metadado encontrado. Verifique se o arquivo tem linhas 'Chave,Valor' antes de 'Stage Number'.")
+
+            # 3) Mesclar com metadados fixos do BD
+            filename_base = os.path.basename(file_path)
+            fixed = self.db_manager.get_fixed_metadados(filename_base)
+            if fixed:
+                for k, v in fixed.items():
+                    if k not in metadados_lidos or not metadados_lidos[k]:
+                        metadados_lidos[k] = v
+
+            # 4) Chamar unify_metadados_keys() (igual estático)
+            self.main_app.metadados = metadados_lidos
+            self.main_app.unify_metadados_keys()  # MESMA FUNÇÃO
+            self.metadados = dict(self.main_app.metadados)
+
+            # 5) Ler CSV a partir da linha "Stage Number"
+            header_line = teste3.find_header_line(file_path)
+            if header_line is None:
+                raise ValueError("Cabeçalho 'Stage Number' não encontrado no .gds.")
+
+            import pandas as pd
+            df = pd.read_csv(file_path, encoding='latin-1', skiprows=header_line, on_bad_lines='skip')
+            df.rename(columns=lambda x: x.strip(), inplace=True)
+            if "Stage Number" in df.columns:
+                df.rename(columns={"Stage Number": "stage_no"}, inplace=True)
+            elif "stage_no" not in df.columns:
+                raise ValueError("Não foi encontrada coluna 'Stage Number' (ou 'stage_no').")
+
+            # 6) Guardar no df_ciclico (base) e permitir concatenações
+            self.df_ciclico = df.copy()
+            self.df_list = [df.copy()]
+            self.num_files_added = 1
+
+            # Opcional: exibir último stage
+            last_stage = self.df_ciclico['stage_no'].max()
+            self.label_stage.config(text=f"Último stage: {last_stage}")
+
+            # Habilitar botões: add_next_file, salvar
+            self.btn_add_next.config(state="normal")
+            self.btn_save.config(state="normal")
+
+            messagebox.showinfo("Sucesso", "Primeiro arquivo do ensaio cíclico selecionado e processado com sucesso.")
+
+        except Exception as e:
+            traceback.print_exc()
+            messagebox.showerror("Erro", f"Falha ao processar o arquivo:\n{e}")
+
+
     def select_file(self):
         selection = self.file_listbox.curselection()
         if not selection:
@@ -317,11 +395,9 @@ class InterfaceApp:
             "B": "_B",
             "Adensamento": "_ad",
 
-            # ALTERAÇÃO: Antes era "Cisalhamento" -> "_cis" teste
-            # Agora possuímos dois campos:
             "Cisalhamento Inicial": "_cis_inicial",
             "Cisalhamento Final": "_cis_final",
-
+            "Sequencial": "sequencial",
             "Volume de umidade médio INICIAL": "w_0",
             "Volume de umidade médio FINAL": "w_f",
             "Initial Height (mm)": "h_init",
@@ -452,7 +528,7 @@ class InterfaceApp:
         # Exemplo:
         metadadosarquivo_cols = [
             "_B", "_ad", "_cis_inicial", "_cis_final",
-            "w_0", "w_f", "h_init", "d_init", "ram_diam", "spec_grav",
+            "w_0", "w_f", "h_init", "d_init", "ram_diam", "spec_grav","sequencial",
             "idcontrato", "idcampanha", "idamostra", "idtipoensaio", "depth",
             "samp_date", "tipo", "init_mass", "init_dry_mass", "spec_grav_assmeas",
             # ...
@@ -551,7 +627,6 @@ class InterfaceApp:
                 command=self.show_metadata_selection_screen, width=20).grid(row=0, column=1, padx=5)
         tk.Button(button_frame, text="Sair",
                 command=self.root.quit, width=20).grid(row=0, column=2, padx=5)
-
 
 
     def show_metadata_selection_screen(self):
@@ -771,7 +846,6 @@ class InterfaceApp:
         tk.Button(button_frame, text="Selecionar Individual", command=self.selecionar_individual_amostra, width=25).grid(row=0, column=1, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=25).grid(row=0, column=2, padx=10)
 
-
     def avancar_planilha_cliente(self):
         selection = self.amostra_listbox.curselection()
         if selection:
@@ -802,30 +876,84 @@ class InterfaceApp:
         tk.Button(button_frame, text="Voltar", command=self.gerar_planilha_cliente_screen, width=15).pack(side=tk.RIGHT, padx=5)
 
     def selecionar_arquivos_planilha_cliente(self, amostra_selecionada):
+        """
+        Tela onde o usuário seleciona até 5 arquivos aprovados (já salvos no banco)
+        para gerar a planilha. Agora com campo de busca por filename.
+        """
         self.clear_screen()
         self.root.title(f"Selecionar Arquivos para Planilha Cliente - {amostra_selecionada}")
 
         frame = tk.Frame(self.root)
         frame.pack(pady=20)
 
-        tk.Label(frame, text=f"Selecione até 5 arquivos da amostra {amostra_selecionada}:").pack(pady=10)
+        # Texto explicativo
+        tk.Label(
+            frame,
+            text=f"Selecione até 5 arquivos (status 'Aprovado') da amostra '{amostra_selecionada}':"
+        ).pack(pady=10)
+
+        # Campo de busca (filtro) por filename
+        tk.Label(frame, text="Filtrar por filename:").pack()
+        self.search_planilha_var = tk.StringVar()
+        self.search_planilha_var.trace(
+            "w",  # dispara ao digitar
+            lambda name, index, mode: self.update_planilha_cliente_listbox()
+        )
+        search_entry = tk.Entry(frame, textvariable=self.search_planilha_var, width=40)
+        search_entry.pack(pady=5)
+
+        # Listbox de seleção múltipla
         self.planilha_cliente_listbox = tk.Listbox(frame, selectmode=tk.MULTIPLE, width=80, height=10)
-        
-        # Obter arquivos aprovados da amostra
+        self.planilha_cliente_listbox.pack()
+
+        # Botões
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=10)
+
+        # Botão para "Gerar Planilha" → Avança para a seleção do método
+        tk.Button(
+            button_frame,
+            text="Gerar Planilha",
+            command=lambda: self.metodo_selection_screen_planilha_cliente(amostra_selecionada),
+            width=15
+        ).pack(side="left", padx=5)
+
+        tk.Button(
+            button_frame,
+            text="Voltar",
+            command=lambda: self.tipo_ensaio_screen_planilha_cliente(amostra_selecionada),
+            width=15
+        ).pack(side="right", padx=5)
+
+        # Carregar a lista de arquivos aprovados do banco de dados
         arquivos_aprovados = self.db_manager.get_ensaios_by_amostra(
             amostra_selecionada,
             status_individual='Aprovado'
         )
-        for arquivo in arquivos_aprovados:
-            self.planilha_cliente_listbox.insert(tk.END, arquivo)
-        self.planilha_cliente_listbox.pack()
+        # Armazena essa lista em um atributo da classe, para podermos filtrar dinamicamente
+        self.arquivos_aprovados_planilha = arquivos_aprovados
 
-        button_frame = tk.Frame(frame)
-        button_frame.pack(pady=10)
+        # Preenche inicialmente a listbox com todos os arquivos aprovados
+        self.update_planilha_cliente_listbox()
 
-        # Passar 'amostra_selecionada' como parâmetro usando lambda
-        tk.Button(button_frame, text="Gerar Planilha", command=lambda: self.metodo_selection_screen_planilha_cliente(amostra_selecionada), width=15).pack(side=tk.LEFT, padx=5)
-        tk.Button(button_frame, text="Voltar", command=lambda: self.tipo_ensaio_screen_planilha_cliente(amostra_selecionada), width=15).pack(side=tk.RIGHT, padx=5)
+    def update_planilha_cliente_listbox(self):
+        """
+        Filtra a lista de arquivos aprovados de acordo com o texto
+        digitado no campo self.search_planilha_var.
+        Exibe na self.planilha_cliente_listbox apenas os arquivos
+        que contiverem o texto pesquisado (ignora maiúsculo/minúsculo).
+        """
+        # Texto digitado no campo de busca
+        search_text = self.search_planilha_var.get().strip().lower()
+
+        # Limpa a listbox antes de inserir
+        self.planilha_cliente_listbox.delete(0, tk.END)
+
+        # Para cada arquivo aprovado, verifica se o texto digitado
+        # existe em seu nome (filename)
+        for filename in self.arquivos_aprovados_planilha:
+            if search_text in filename.lower():
+                self.planilha_cliente_listbox.insert(tk.END, filename)
 
     def metodo_selection_screen_planilha_cliente(self, amostra_selecionada):
         selection = self.planilha_cliente_listbox.curselection()
@@ -938,6 +1066,25 @@ class InterfaceApp:
         else:
             messagebox.showerror("Erro", "Nenhuma amostra selecionada!")
             return
+
+    def get_ensaios_by_amostra(self, amostra, status_individual='Aprovado'):
+        """
+        Retorna uma lista de filenames aprovados para uma amostra específica
+        """
+        # Exemplo de consulta (ajuste nomes de tabela e colunas conforme sua estrutura)
+        sql = """
+        SELECT c.filename
+        FROM Cp c
+        JOIN MetadadosArquivo m ON c.idnome = m.idnome
+        WHERE m.idamostra = ? AND c.statusIndividual = ?
+        """
+        cursor = self.conn.execute(sql, (amostra, status_individual))
+        rows = cursor.fetchall()
+        
+        # rows é uma lista de tuplas, cada tupla (filename,)
+        # transformamos em lista de strings
+        result = [row[0] for row in rows]
+        return result
 
     def mostrar_ensaios_amostra(self, amostra_selecionada):
         # Remova self.clear_screen()
@@ -1758,25 +1905,450 @@ class InterfaceApp:
     def clear_screen(self):
         for widget in self.root.winfo_children():
             widget.destroy()
+import os
+import sys
+import tkinter as tk
+from tkinter import messagebox, filedialog
+import traceback
+import pandas as pd
+import datetime
+
+# Importações dos módulos de processamento e acesso ao banco
+from teste1 import FileProcessor
+from teste3 import TableProcessor, find_header_line
+from testeBD import DatabaseManager
+
+def preparar_metadados_para_edicao(metadados):
+    """
+    Retorna um dicionário ordenado contendo somente os campos desejados
+    (por exemplo, os abreviados) e na mesma ordem utilizada no fluxo de "Encontrar Arquivos".
+    """
+    desired_order = [
+        "_B", "_ad", "_cis_inicial", "_cis_final", "w_0", "w_f",
+        "idcontrato", "idcampanha", "idamostra", "idtipoensaio",
+        "sequencial", "cp", "repeticao"
+    ]
+    ordered_meta = {}
+    # Insere primeiro os campos na ordem desejada (se existirem)
+    for key in desired_order:
+        if key in metadados:
+            ordered_meta[key] = metadados[key]
+    # Em seguida, adiciona os demais campos que possam existir
+    for key, value in metadados.items():
+        if key not in ordered_meta:
+            ordered_meta[key] = value
+    return ordered_meta
+
+import os
+import tkinter as tk
+from tkinter import messagebox, filedialog
+import traceback
+import pandas as pd
+import datetime
+import tempfile
+
+# Importa os módulos de processamento e acesso ao banco
+from teste1 import FileProcessor
+from teste3 import TableProcessor, find_header_line
+from testeBD import DatabaseManager
+
+def preparar_metadados_para_edicao(metadados):
+    """
+    Retorna um dicionário ordenado contendo primeiro os campos definidos em desired_order 
+    (se não existirem, são incluídos com valor vazio) e, em seguida, os demais campos conforme 
+    foram lidos do arquivo.
+    """
+    desired_order = [
+        "_B", "_ad", "_cis_inicial", "_cis_final", "w_0", "w_f",
+        "idcontrato", "idcampanha", "idamostra", "idtipoensaio",
+        "sequencial", "cp", "repeticao"
+    ]
+    ordered_meta = {}
+    # Garante que os campos desejados apareçam (mesmo com valor padrão vazio)
+    for key in desired_order:
+        ordered_meta[key] = metadados.get(key, "")
+    # Acrescenta os demais campos que estejam no dicionário original
+    for key, value in metadados.items():
+        if key not in ordered_meta:
+            ordered_meta[key] = value
+    return ordered_meta
+
+#########################################
+# Classe TriaxialCiclicoWindow
+#########################################
+import tkinter as tk
+from tkinter import messagebox, filedialog
+import pandas as pd
+import tempfile
+import datetime
+import traceback
+import re
+from teste1 import FileProcessor
+from teste3 import TableProcessor, find_header_line
+from testeBD import resource_path  # Supondo que resource_path esteja definido em testeBD ou similar
+
+class TriaxialCiclicoWindow(tk.Frame):
+    """
+    Janela para o fluxo de ensaios triaxiais cíclicos.
+    
+    Fluxo resumido:
+      1) Selecionar o primeiro arquivo .gds (mesma lógica do fluxo "Encontrar Arquivos").
+      2) Adicionar arquivos subsequentes, ajustando 'stage_no' (concatenação).
+      3) Permitir a edição dos metadados do primeiro arquivo.
+      4) Processar os dados – mantendo as colunas _Original conforme lidas e calculando as derivadas
+         via TableProcessor – e salvar tudo no banco como um único ensaio.
+    
+    Nota: Todo o fluxo (exceto os gráficos) ocorre na mesma janela principal, e ao finalizar,
+          a tela de resultado é exibida com botões para plotar os gráficos individuais.
+    """
+    def __init__(self, master, db_manager, main_app, *args, **kwargs):
+        # Herdamos de tk.Frame para navegação in place
+        super().__init__(master, *args, **kwargs)
+        self.master = master
+        self.db_manager = db_manager
+        self.main_app = main_app  # Referência à instância principal (InterfaceApp)
+
+        # Estado interno
+        self.df_ciclico = pd.DataFrame()
+        self.df_list = []
+        self.num_files_added = 0
+        self.metadados_first = {}  # Dicionário dos metadados do primeiro arquivo
+
+        # Insere este frame no container principal
+        self.pack(fill="both", expand=True)
+        self._create_widgets()
+
+    def _create_widgets(self):
+        # Limpa a tela principal (navegação in place)
+        self.main_app.clear_screen()
+        # Cria um container para os componentes deste fluxo
+        container = tk.Frame(self.master)
+        container.pack(pady=15, fill="both", expand=True)
+        tk.Label(container, text="Fluxo Triaxial Cíclico", font=("Arial", 16)).pack(pady=5)
+        tk.Button(container, text="Selecionar Primeiro Arquivo", command=self.on_select_first_file).pack(pady=5)
+        self.btn_add_next = tk.Button(container, text="Adicionar Próximo Arquivo", command=self.on_add_next_file, state="disabled")
+        self.btn_add_next.pack(pady=5)
+        self.btn_voltar = tk.Button(container, text="Voltar (remover último arquivo)", command=self.on_voltar_file, state="disabled")
+        self.btn_voltar.pack(pady=5)
+        self.btn_save = tk.Button(container, text="Salvar no Banco", command=self.on_save, state="disabled")
+        self.btn_save.pack(pady=5)
+        self.label_stage = tk.Label(container, text="Último stage: N/A")
+        self.label_stage.pack(pady=5)
+        tk.Button(container, text="Voltar ao Menu Principal", command=self.main_app.create_main_menu).pack(pady=5)
+
+    def on_select_first_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Selecione o primeiro arquivo .gds do ensaio cíclico",
+            filetypes=[("GDS Files", "*.gds")]
+        )
+        if not file_path:
+            return  # Usuário cancelou
+        try:
+            directory = resource_path('LUIZ-Teste')
+            self.first_file_path = file_path
+            # 1) Ler os metadados (linhas antes de "Stage Number")
+            processor = FileProcessor(directory)
+            metadados = processor.process_gds_file(file_path)
+            if not metadados:
+                raise ValueError("Nenhum metadado encontrado. Verifique o formato do arquivo.")
+            print("Metadados lidos:", metadados)
+            filename_base =  os.path.basename(file_path)
+            fixed = self.db_manager.get_fixed_metadados(filename_base)
+            if fixed:
+                for k, v in fixed.items():
+                    if k not in metadados or not metadados[k]:
+                        metadados[k] = v
+            # 2) Atribuir campos obrigatórios
+            metadados["idcontrato"] = metadados.get("idcontrato", "").strip()
+            metadados["idcampanha"] = metadados.get("idcampanha", "").strip()
+            metadados["idamostra"]  = metadados.get("idamostra", "").strip()
+            # Processa 'tipo' para extrair idtipoensaio e sequencial
+            desc = metadados.get("tipo", "").strip()
+            match_desc = re.match(r"(\d+)[Ss](\d+)", desc)
+            if match_desc:
+                metadados["idtipoensaio"] = int(match_desc.group(1))
+                metadados["sequencial"] = int(match_desc.group(2))
+            else:
+                metadados["idtipoensaio"] = 0
+                metadados["sequencial"] = 0
+            # Processa 'test_number' para extrair cp e repeticao
+            test = metadados.get("test_number", "").strip()
+            match_test = re.match(r"([A-Za-z]+)[Rr]?(\d+)", test)
+            if match_test:
+                metadados["cp"] = match_test.group(1)[0].upper()
+                metadados["repeticao"] = int(match_test.group(2))
+            else:
+                metadados["cp"] = None
+                metadados["repeticao"] = None
+            # Remove chaves que não serão mais usadas
+            if "tipo" in metadados:
+                del metadados["tipo"]
+            if "test_number" in metadados:
+                del metadados["test_number"]
+            print("Metadados finais para salvar:", metadados)
+            self.main_app.metadados = metadados
+            self.main_app.unify_metadados_keys()
+            self.metadados_first = dict(self.main_app.metadados)
+            # 3) Ler o CSV a partir da linha "Stage Number"
+            header_line = find_header_line(file_path)
+            if header_line is None:
+                raise ValueError("Cabeçalho 'Stage Number' não encontrado no arquivo .gds.")
+            df = pd.read_csv(file_path, encoding='latin-1', skiprows=header_line, on_bad_lines='skip')
+            df.rename(columns=lambda x: x.strip(), inplace=True)
+            if "Stage Number" in df.columns:
+                df.rename(columns={"Stage Number": "stage_no"}, inplace=True)
+            elif "stage_no" not in df.columns:
+                raise ValueError("Coluna 'Stage Number' (ou 'stage_no') não encontrada no CSV.")
+            self.df_ciclico = df.copy()
+            self.df_list = [df.copy()]
+            self.num_files_added = 1
+            last_stage = self.df_ciclico['stage_no'].max()
+            self.label_stage.config(text=f"Último stage: {last_stage}")
+            self.btn_add_next.config(state="normal")
+            self.btn_save.config(state="normal")
+            messagebox.showinfo("Sucesso", "Primeiro arquivo do ensaio cíclico selecionado e processado com sucesso.")
+        except Exception as e:
+            traceback.print_exc()
+            messagebox.showerror("Erro", f"Falha ao processar o arquivo:\n{e}")
+
+    def on_add_next_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Selecione outro arquivo .gds",
+            filetypes=[("GDS Files", "*.gds")]
+        )
+        if not file_path:
+            return
+        try:
+            header_line = find_header_line(file_path)
+            if header_line is None:
+                raise ValueError("Não encontrou 'Stage Number' no arquivo adicional.")
+            df_next = pd.read_csv(file_path, encoding='latin-1', skiprows=header_line, on_bad_lines='skip')
+            df_next.rename(columns=lambda x: x.strip(), inplace=True)
+            if "Stage Number" in df_next.columns:
+                df_next.rename(columns={"Stage Number": "stage_no"}, inplace=True)
+            elif "stage_no" not in df_next.columns:
+                raise ValueError("Coluna 'Stage Number' (ou 'stage_no') não encontrada no arquivo adicional.")
+            last_stage = self.df_ciclico['stage_no'].max()
+            df_next['stage_no'] += last_stage  # Atualiza os stage_no para continuidade
+            self.df_ciclico = pd.concat([self.df_ciclico, df_next], ignore_index=True)
+            self.df_list.append(df_next.copy())
+            self.num_files_added += 1
+            new_last_stage = self.df_ciclico['stage_no'].max()
+            self.label_stage.config(text=f"Último stage: {new_last_stage}")
+            messagebox.showinfo("Sucesso", f"Arquivo #{self.num_files_added} adicionado.\nÚltimo stage agora: {new_last_stage}")
+            if self.num_files_added > 1:
+                self.btn_voltar.config(state="normal")
+        except Exception as e:
+            traceback.print_exc()
+            messagebox.showerror("Erro", f"Falha ao adicionar outro arquivo:\n{e}")
+
+    def on_voltar_file(self):
+        if self.num_files_added > 1:
+            self.df_list.pop()
+            self.num_files_added -= 1
+            self.df_ciclico = pd.concat(self.df_list, ignore_index=True)
+            last_stage = self.df_ciclico['stage_no'].max()
+            self.label_stage.config(text=f"Último stage: {last_stage}")
+            messagebox.showinfo("Voltar", "Último arquivo removido.")
+            if self.num_files_added == 1:
+                self.btn_voltar.config(state="disabled")
+        else:
+            messagebox.showwarning("Aviso", "Não há arquivos para remover além do primeiro.")
+
+    def on_save(self):
+        if self.df_ciclico.empty:
+            messagebox.showerror("Erro", "Nenhum dado concatenado para salvar.")
+            return
+        # Em vez de abrir uma janela pop-up para editar os metadados, navegamos para um novo frame
+        self.show_editar_metadados_frame(self.metadados_first, on_save_callback=self.finish_and_save)
+
+    def finish_and_save(self, updated_metadados):
+        try:
+            # 1) Atualiza os metadados do primeiro arquivo com os valores editados.
+            self.metadados_first = dict(updated_metadados)
+            df_concatenado = self.df_ciclico.copy()
+
+            # 2) Renomeia "stage_no" para "Stage Number" para o processamento
+            df_temp = df_concatenado.copy()
+            if "stage_no" in df_temp.columns:
+                df_temp.rename(columns={"stage_no": "Stage Number"}, inplace=True)
+
+            # 3) Garante que as colunas _Original obrigatórias existam
+            for col in ["rad_vol_Original", "back_vol_Original", "cur_area_Original", "vol_change_Original"]:
+                if col not in df_temp.columns:
+                    df_temp[col] = pd.NA
+
+            # 4) Salva o DataFrame temporário em um arquivo CSV para processamento
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="w", newline="", encoding="latin-1")
+            temp_filepath = temp_file.name
+            df_temp.to_csv(temp_filepath, index=False)
+            temp_file.close()
+
+            # 5) Processa os dados chamando o TableProcessor (fluxo estático)
+            result = TableProcessor.process_table_data(self.db_manager, self.metadados_first, temp_filepath)
+            if not result:
+                messagebox.showerror("Erro", "Falha ao processar os dados pelo TableProcessor. Verifique se o arquivo está correto.")
+                return
+            df_final = result["df"]
+            metadados_parte2 = result["metadados_parte2"]
+
+            # 6) Atualiza os metadados com os valores calculados
+            self.metadados_first.update(metadados_parte2.get_all_attributes())
+
+            # 7) Salva o DataFrame final no banco de dados
+            ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            final_filename = f"Ciclico_{ts}.gds"
+            self.db_manager.save_to_database(self.metadados_first, df_final, final_filename)
+
+            # 8) Log: exibe cabeçalhos e as duas primeiras linhas do registro salvo
+            cursor = self.db_manager.conn.execute("SELECT * FROM EnsaiosTriaxiais LIMIT 2")
+            rows = cursor.fetchall()
+            headers = [desc[0] for desc in cursor.description]
+            print("\n>>> Salvo no banco com sucesso no fluxo cíclico.")
+            print("Cabeçalhos:", headers)
+            for i, row in enumerate(rows, start=1):
+                print(f"Linha {i}:", row)
+
+            # 9) Cria uma cópia dos metadados atualizados para exibição
+            resultados = self.metadados_first.copy()
+
+            messagebox.showinfo("Sucesso", f"Arquivos cíclicos salvos como '{final_filename}'!")
+
+            # 10) Exibe a tela de resultados iniciais, passando os metadados e o nome do arquivo salvo
+            self.show_resultados_iniciais(resultados, final_filename)
+
+            # 11) Limpa o estado do fluxo cíclico
+            self.df_ciclico = pd.DataFrame()
+            self.df_list.clear()
+            self.num_files_added = 0
+            self.metadados_first.clear()
+            # Desabilita os botões se ainda existirem (usando winfo_exists para evitar erros caso tenham sido destruídos)
+            if self.btn_add_next.winfo_exists():
+                self.btn_add_next.config(state="disabled")
+            if self.btn_voltar.winfo_exists():
+                self.btn_voltar.config(state="disabled")
+            if self.btn_save.winfo_exists():
+                self.btn_save.config(state="disabled")
+        except Exception as e:
+            traceback.print_exc()
+            messagebox.showerror("Erro", f"Não foi possível salvar o ensaio cíclico:\n{e}")
 
 
+    def show_editar_metadados_frame(self, metadados, on_save_callback=None):
+        # Navega para um novo frame para edição dos metadados (in place)
+        self.main_app.clear_screen()
+        edit_frame = tk.Frame(self.master)
+        edit_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        tk.Label(edit_frame, text="Edite os metadados do primeiro arquivo", font=("Arial", 16)).pack(pady=10)
+        # Ordena os metadados de acordo com a ordem desejada
+        desired_order = ["_B", "_ad", "_cis_inicial", "_cis_final", "w_0", "w_f",
+                         "idcontrato", "idcampanha", "idamostra", "idtipoensaio",
+                         "sequencial", "cp", "repeticao"]
+        ordered_meta = {}
+        for key in desired_order:
+            ordered_meta[key] = metadados.get(key, "")
+        for key, value in metadados.items():
+            if key not in ordered_meta:
+                ordered_meta[key] = value
+        metadata_items = list(ordered_meta.items())
+        listbox_frame = tk.Frame(edit_frame)
+        listbox_frame.pack(pady=5, fill="both", expand=True)
+        scrollbar = tk.Scrollbar(listbox_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        listbox = tk.Listbox(listbox_frame, width=70, height=12, yscrollcommand=scrollbar.set)
+        listbox.pack(side=tk.LEFT, fill="both", expand=True)
+        scrollbar.config(command=listbox.yview)
+        for key, value in metadata_items:
+            listbox.insert(tk.END, f"{key}: {value}")
+        def edit_selected():
+            sel = listbox.curselection()
+            if not sel:
+                messagebox.showerror("Erro", "Nenhum metadado selecionado!")
+                return
+            idx = sel[0]
+            chave, valor = metadata_items[idx]
+            sub_frame = tk.Frame(edit_frame)
+            sub_frame.pack(pady=5)
+            tk.Label(sub_frame, text=f"Editar {chave}:").pack(side=tk.LEFT)
+            entry = tk.Entry(sub_frame, width=30)
+            entry.insert(tk.END, str(valor))
+            entry.pack(side=tk.LEFT)
+            def finish_edit():
+                novo_valor = entry.get().strip()
+                metadata_items[idx] = (chave, novo_valor)
+                listbox.delete(idx)
+                listbox.insert(idx, f"{chave}: {novo_valor}")
+                sub_frame.destroy()
+            tk.Button(sub_frame, text="OK", command=finish_edit).pack(side=tk.LEFT, padx=5)
+        tk.Button(edit_frame, text="Editar Metadado Selecionado", command=edit_selected, width=25).pack(pady=5)
+        btn_frame = tk.Frame(edit_frame)
+        btn_frame.pack(pady=10)
+        def save_and_close():
+            updated_meta = dict(metadata_items)
+            if on_save_callback:
+                on_save_callback(updated_meta)
+        tk.Button(btn_frame, text="Salvar e Fechar", command=save_and_close, width=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancelar", command=self.main_app.create_main_menu, width=20).pack(side=tk.LEFT, padx=5)
+
+    def show_resultados_iniciais(self, metadados_salvos, filename):
+        self.main_app.clear_screen()
+        result_frame = tk.Frame(self.master)
+        result_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        tk.Label(result_frame, text="Resultados Iniciais do Ensaio Cíclico", font=("Arial", 16)).pack(pady=10)
+
+        # Widget para exibir os metadados calculados (valores editados + cálculos iniciais)
+        text_widget = tk.Text(result_frame, width=80, height=20)
+        text_widget.pack(pady=5, fill="both", expand=True)
+        for key, value in metadados_salvos.items():
+            text_widget.insert(tk.END, f"{key}: {value}\n")
+        text_widget.config(state=tk.DISABLED)
+
+        # Botões de ação
+        btn_frame = tk.Frame(result_frame)
+        btn_frame.pack(pady=10)
+        tk.Button(
+            btn_frame,
+            text="Plotar Gráficos Individual",
+            command=lambda: self.main_app.plotar_graficos_arquivo(filename),
+            width=25
+        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(
+            btn_frame,
+            text="Voltar ao Menu Principal",
+            command=self.main_app.create_main_menu,
+            width=25
+        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(
+            btn_frame,
+            text="Sair",
+            command=self.master.quit,
+            width=25
+        ).pack(side=tk.LEFT, padx=5)
+
+
+# --- Trecho final para inicializar a aplicação ---
 import os
 import sys
 
 def resource_path(relative_path):
-    """Obtém o caminho absoluto para um recurso, funcionando tanto no desenvolvimento quanto no PyInstaller."""
+    """
+    Obtém o caminho absoluto para um recurso, tanto no desenvolvimento
+    quanto no PyInstaller.
+    """
     try:
-        # PyInstaller cria uma pasta temporária e armazena o caminho em _MEIPASS
-        base_path = sys._MEIPASS
+        base_path = sys._MEIPASS  # Atributo definido pelo PyInstaller
     except AttributeError:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
-
 if __name__ == "__main__":
     print("ABRIU APLICAÇÃO")
+    from testeBD import DatabaseManager
+    from interface import InterfaceApp  # Certifique-se de que InterfaceApp está definido corretamente
     db_manager = DatabaseManager()
     root = tk.Tk()
+    # Inicializa a aplicação principal
     app = InterfaceApp(root)
     root.mainloop()
     print("FECHOU APLICAÇÃO")
+
