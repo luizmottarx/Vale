@@ -1214,23 +1214,27 @@ class InterfaceApp:
         
     def plotar_graficos_arquivo(self, arquivo_selecionado):
         """
-        Carrega os dados do arquivo selecionado, obtém os metadados
-        e plota diversos gráficos referentes ao intervalo de cisalhamento.
+        Carrega os dados do arquivo selecionado e plota 12 gráficos
+        referentes ao estágio de cisalhamento, usando a coluna du_kpa
+        (no lugar de du_kpa_A e du_kpa_B).
+        
+        Requer que o DataFrame possua 'du_kpa'.
+        Faz scatter sem linha, sem legenda fixa (label aparece no hover).
         """
         try:
-            # 1) Obter dados do arquivo
+            # 1) Obter dados do arquivo (DataFrame do banco)
             data = self.db_manager.get_data_for_file(arquivo_selecionado)
             if data is None:
                 messagebox.showerror("Erro", "Não foi possível obter os dados para plotagem.")
                 return
 
-            # 2) Obter metadados para o arquivo
+            # 2) Obter metadados do arquivo
             metadados = self.db_manager.get_metadata_for_file(arquivo_selecionado)
             if not metadados:
                 messagebox.showerror("Erro", "Nenhum metadado encontrado para o arquivo selecionado.")
                 return
 
-            # 3) Ler cisalhamento inicial e final (default 8~11, por exemplo)
+            # 3) Ler cisalhamento inicial e final (dinâmico a partir dos metadados)
             try:
                 cis_inicial = int(float(metadados.get("Cisalhamento Inicial", 8)))
                 cis_final   = int(float(metadados.get("Cisalhamento Final", 8)))
@@ -1238,87 +1242,96 @@ class InterfaceApp:
                 messagebox.showerror("Erro", f"Erro ao converter valores de Cisalhamento para inteiro: {ve}")
                 return
 
-            # 4) Converter lista de dicts em DataFrame
+            # 4) Converter a lista de dicts em DataFrame e filtrar colunas numéricas
+            import pandas as pd
             df = pd.DataFrame(data)
 
-            # 5) Converter colunas necessárias para float
             numeric_columns = [
-                'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
-                'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B',
-                'ax_strain', 'vol_strain', 'du_kpa', 'm_A', 'm_B', 'stage_no'
+                'dev_stress_A', 'dev_stress_B',
+                'eff_camb_A', 'eff_camb_B',
+                'du_kpa',  # agora é apenas 'du_kpa'
+                'vol_strain',
+                'void_ratio_A', 'void_ratio_B',
+                'nqp_A', 'nqp_B',
+                'm_A', 'm_B',
+                'ax_strain',
+                'stage_no'
             ]
             for col in numeric_columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # 6) Filtrar dados pelo intervalo de cisalhamento
+            # 5) Filtrar dados no intervalo do stage de cisalhamento
             df_cisalhamento = df[
                 (df['stage_no'] >= cis_inicial) &
                 (df['stage_no'] <= cis_final)
             ]
-
             if df_cisalhamento.empty:
                 messagebox.showinfo(
                     "Informação",
-                    f"Nenhum dado encontrado no intervalo de cisalhamento ({cis_inicial} a {cis_final})."
+                    f"Nenhum dado encontrado no intervalo ({cis_inicial} a {cis_final})."
                 )
                 return
 
-            # 7) Definir os plots desejados (y_col, x_col)
+            # 6) Definir os pares de colunas para 12 gráficos
             plots = [
-                ('dev_stress_A', 'ax_strain'),
-                ('dev_stress_B', 'ax_strain'),
-                ('dev_stress_A', 'eff_camb_A'),
-                ('dev_stress_B', 'eff_camb_B'),
-                ('du_kpa', 'ax_strain'),
-                ('vol_strain', 'ax_strain'),
-                ('void_ratio_A', 'eff_camb_A'),
-                ('void_ratio_B', 'eff_camb_B'),
-                ('nqp_A', 'ax_strain'),
-                ('nqp_B', 'ax_strain'),
-                ('m_A', 'ax_strain'),
-                ('m_B', 'ax_strain'),
+                ('dev_stress_A', 'ax_strain'),   # 1
+                ('dev_stress_B', 'ax_strain'),   # 2
+                ('dev_stress_A', 'eff_camb_A'),  # 3
+                ('dev_stress_B', 'eff_camb_B'),  # 4
+                ('du_kpa',       'ax_strain'),   # 5 (coluna nova, substituindo du_kpa_A / du_kpa_B)
+                ('vol_strain',   'ax_strain'),   # 6
+                ('void_ratio_A', 'eff_camb_A'),  # 7
+                ('void_ratio_B', 'eff_camb_B'),  # 8
+                ('nqp_A',        'ax_strain'),   # 9
+                ('nqp_B',        'ax_strain'),   # 10
+                ('m_A',          'ax_strain'),   # 11
+                ('m_B',          'ax_strain'),   # 12
             ]
 
-            # 8) Plotar em subplots
             import mplcursors
             import matplotlib.pyplot as plt
 
-            num_plots = len(plots)
+            num_plots = len(plots)  # 12
             cols = 3
-            rows = num_plots // cols + int(num_plots % cols > 0)
+            rows = num_plots // cols + int(num_plots % cols > 0)  # => 4 linhas (12 subplots)
 
             fig, axs = plt.subplots(rows, cols, figsize=(18, 6 * rows))
             axs = axs.flatten()
 
+            # 7) Plotar (scatter) sem linha e sem legenda fixa
             artists = []
             for i, (y_col, x_col) in enumerate(plots):
                 ax = axs[i]
-                # Scatter plot
                 sc = ax.scatter(
                     df_cisalhamento[x_col],
                     df_cisalhamento[y_col],
-                    picker=True,
-                    label=arquivo_selecionado
+                    s=8,             # Tamanho do ponto
+                    linewidths=0.5,  # Contorno mais fino
+                    edgecolors='blue',
+                    facecolors='none',
+                    label=arquivo_selecionado  # Para exibir no hover
                 )
+                ax.grid(True)
                 ax.set_xlabel(x_col)
                 ax.set_ylabel(y_col)
                 ax.set_title(f"{y_col} x {x_col}")
+
                 artists.append(sc)
 
-            # Se sobrar algum eixo não usado, removemos
+            # Remover subplots que sobraram (se houver)
             for i in range(num_plots, len(axs)):
                 fig.delaxes(axs[i])
 
             plt.tight_layout()
 
-            # 9) Janela Tk para exibir os gráficos
+            # 8) Criar janela Tk com scrollbar
             graph_window = tk.Toplevel(self.root)
             graph_window.title(f"Gráficos do Arquivo {arquivo_selecionado}")
             graph_window.geometry("1280x960")
 
             from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-            # Cria Canvas + Scrollbars
             canvas = tk.Canvas(graph_window)
             scroll_y = tk.Scrollbar(graph_window, orient="vertical", command=canvas.yview)
             scroll_x = tk.Scrollbar(graph_window, orient="horizontal", command=canvas.xview)
@@ -1328,15 +1341,10 @@ class InterfaceApp:
             scroll_y.pack(side="right", fill="y")
             scroll_x.pack(side="bottom", fill="x")
 
-            # Cria um frame interno ao Canvas
             scroll_frame = tk.Frame(canvas)
-            scroll_frame.bind(
-                "<Configure>",
-                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-            )
+            scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
             canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
 
-            # Agora insere o FigureCanvas e a toolbar dentro de scroll_frame
             canvas_plot = FigureCanvasTkAgg(fig, master=scroll_frame)
             canvas_plot.draw()
             canvas_plot.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -1345,14 +1353,15 @@ class InterfaceApp:
             toolbar.update()
             canvas_plot.get_tk_widget().pack()
 
+            # 9) Cursor: ao passar o mouse, mostra nome do arquivo + (x, y)
             cursor = mplcursors.cursor(artists, hover=True)
-
             @cursor.connect("add")
             def on_add(sel):
                 x, y = sel.target
-                sel.annotation.set_text(f"x: {x:.4f}\ny: {y:.4f}")
+                nome_arq = sel.artist.get_label()
+                sel.annotation.set_text(f"{nome_arq}\nx: {x:.4f}\ny: {y:.4f}")
 
-            # Botões extras no final da janela
+            # 10) Botões extras (configurar escalas, aprovar, refugado, sair)
             button_frame = tk.Frame(scroll_frame)
             button_frame.pack(pady=10)
 
@@ -1362,22 +1371,19 @@ class InterfaceApp:
                 graph_window.destroy()
 
             tk.Button(
-                button_frame,
-                text="Configurar Escalas",
+                button_frame, text="Configurar Escalas",
                 command=lambda: self.configurar_escalas(fig, axs),
                 width=20
             ).pack(side="left", padx=5)
 
             tk.Button(
-                button_frame,
-                text="Aprovado",
+                button_frame, text="Aprovado",
                 command=lambda: atualizar_status('Aprovado'),
                 width=20
             ).pack(side="left", padx=5)
 
             tk.Button(
-                button_frame,
-                text="Refugado",
+                button_frame, text="Refugado",
                 command=lambda: atualizar_status('Refugado'),
                 width=20
             ).pack(side="left", padx=5)
@@ -1390,26 +1396,7 @@ class InterfaceApp:
             messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
 
 
-            def atualizar_status(status):
-                self.db_manager.update_status_cp(arquivo_selecionado, status)
-                messagebox.showinfo("Sucesso", f"Status do arquivo '{arquivo_selecionado}' atualizado para '{status}'.")
-                graph_window.destroy()
 
-            button_frame = tk.Frame(scroll_frame)
-            button_frame.pack(pady=10)
-
-            tk.Button(button_frame, text="Configurar Escalas", command=lambda: self.configurar_escalas(fig, axs), width=20).pack(side="left", padx=5)
-
-            tk.Button(button_frame, text="Aprovado", command=lambda: atualizar_status('Aprovado'), width=20).pack(side="left", padx=5)
-
-            tk.Button(button_frame, text="Refugado", command=lambda: atualizar_status('Refugado'), width=20).pack(side="left", padx=5)
-
-            tk.Button(button_frame, text="Sair", command=graph_window.destroy, width=20).pack(side="left", padx=5)
-
-        except KeyError as e:
-            messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Ocorreu um erro ao plotar os gráficos: {e}")
 
 
     def verificar_arquivo_individual(self):
@@ -1472,15 +1459,16 @@ class InterfaceApp:
             traceback.print_exc()
             return None
 
-    # Funções de Plotagem de Gráficos Unificadas
+        # Funções de Plotagem de Gráficos Unificadas
     def plotar_graficos_amostra(self, amostra_selecionada):
         """
-        Obtém múltiplos arquivos associados à amostra selecionada,
-        filtra pelo intervalo de cisalhamento, e plota diversos gráficos
-        comparando cada arquivo em um único subplot.
+        Obtém vários arquivos para a amostra selecionada, filtra pelo 
+        stage de cisalhamento (dinâmico de cada arquivo), e plota 6 gráficos
+        para todos os arquivos juntos. Cada arquivo tem sua cor aleatória,
+        mas fixa em todos os subplots. Sem legenda fixa; hover mostra o nome.
         """
         try:
-            # 1) Quais arquivos (filenames) estão selecionados?
+            # 1) Arquivos selecionados
             selected_files = [filename for filename, var in self.selected_files_var.items() if var.get()]
             if not selected_files:
                 messagebox.showerror("Erro", "Nenhum arquivo selecionado para plotar.")
@@ -1492,7 +1480,7 @@ class InterfaceApp:
                 messagebox.showinfo("Informação", "Nenhum dado encontrado para os arquivos selecionados.")
                 return
 
-            # 3) Agrupar dados por arquivo
+            import pandas as pd
             data_by_file = {}
             for row in data:
                 arquivo = row['NomeCompleto']
@@ -1500,39 +1488,32 @@ class InterfaceApp:
                     data_by_file[arquivo] = []
                 data_by_file[arquivo].append(row)
 
-            # 4) Para cada arquivo, criar DataFrame e filtrar cisalhamento
-            import pandas as pd
+            # 3) Para cada arquivo, filtrar pelo cisalhamento
             datasets = {}
-
             for arquivo, rows in data_by_file.items():
                 metadados = self.db_manager.get_metadata_for_file(arquivo)
-
-                # Se não houver metadados, usar defaults
                 if not metadados:
-                    # Exemplo: default 8~11
-                    cis_inicial = 8
-                    cis_final   = 11
+                    cis_inicial, cis_final = 8, 11
                 else:
-                    # Tentar ler do dicionário
                     try:
                         cis_inicial = int(float(metadados.get("Cisalhamento Inicial", 8)))
                         cis_final   = int(float(metadados.get("Cisalhamento Final", 8)))
                     except ValueError:
-                        # Se der erro, usar valores padrão
-                        cis_inicial = 8
-                        cis_final   = 11
+                        cis_inicial, cis_final = 8, 11
 
                 df = pd.DataFrame(rows)
-
                 numeric_columns = [
-                    'void_ratio_A', 'void_ratio_B', 'eff_camb_A', 'eff_camb_B',
-                    'dev_stress_A', 'dev_stress_B', 'nqp_A', 'nqp_B',
-                    'ax_strain', 'vol_strain', 'du_kpa', 'm_A', 'm_B', 'stage_no'
+                    'void_ratio_A', 'void_ratio_B',
+                    'eff_camb_A', 'eff_camb_B',
+                    'dev_stress_A', 'dev_stress_B',
+                    'nqp_A', 'nqp_B',
+                    'ax_strain',
+                    'stage_no'
                 ]
                 for col in numeric_columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
 
-                # Filtrar intervalos
                 df_cisalhamento = df[
                     (df['stage_no'] >= cis_inicial) &
                     (df['stage_no'] <= cis_final)
@@ -1540,7 +1521,7 @@ class InterfaceApp:
                 if df_cisalhamento.empty:
                     messagebox.showwarning(
                         "Aviso",
-                        f"Arquivo '{arquivo}': Nenhum dado no intervalo {cis_inicial}–{cis_final}. Usando DF vazio."
+                        f"Arquivo '{arquivo}': Nenhum dado no intervalo {cis_inicial}–{cis_final}."
                     )
                     datasets[arquivo] = pd.DataFrame(columns=numeric_columns)
                 else:
@@ -1550,67 +1531,88 @@ class InterfaceApp:
                 messagebox.showinfo("Informação", "Nenhum dado encontrado para os arquivos selecionados.")
                 return
 
-            # 5) Plotar todos os datasets no mesmo conjunto de subplots
+            # 4) Definir as colunas a plotar (6 gráficos)
+            #    (void_ratio_A vs eff_camb_A, void_ratio_B vs eff_camb_B,
+            #     dev_stress_A vs eff_camb_A, dev_stress_B vs eff_camb_B,
+            #     nqp_A vs ax_strain, nqp_B vs ax_strain)
             import mplcursors
             import matplotlib.pyplot as plt
+            import random
+            import matplotlib.colors as mcolors
 
-            # Se quiser, pode alterar quantos gráficos serão feitos
+            colors_list = list(mcolors.TABLEAU_COLORS.values())
+            # Dicionário para cor de cada arquivo (só gera 1x por arquivo)
+            cores_por_arquivo = {}
+
+            # Prepara as chaves (nomes de arquivos)
+            for arquivo in datasets.keys():
+                cores_por_arquivo[arquivo] = random.choice(colors_list)
+
             plots = [
                 ('void_ratio_A', 'eff_camb_A'),
                 ('void_ratio_B', 'eff_camb_B'),
-                ('dev_stress_A', 'ax_strain'),
-                ('dev_stress_B', 'ax_strain'),
-                ('nqp_A', 'ax_strain'),
-                ('nqp_B', 'ax_strain'),
+                ('dev_stress_A', 'eff_camb_A'),
+                ('dev_stress_B', 'eff_camb_B'),
+                ('nqp_A',        'ax_strain'),
+                ('nqp_B',        'ax_strain')
             ]
-
-            num_plots = len(plots)
+            num_plots = len(plots)  # 6
             cols = 3
-            rows = num_plots // cols + int(num_plots % cols > 0)
+            rows = num_plots // cols + int(num_plots % cols > 0)  # => 2 linhas, 6 subplots
+
             fig, axs = plt.subplots(rows, cols, figsize=(18, 6 * rows))
             axs = axs.flatten()
 
             artists = []
-
-            for idx, (y_col, x_col) in enumerate(plots):
-                ax = axs[idx]
+            for i, (y_col, x_col) in enumerate(plots):
+                ax = axs[i]
                 for arquivo, df_cisalhamento in datasets.items():
-                    if not df_cisalhamento.empty:
-                        sc = ax.scatter(
-                            df_cisalhamento[x_col],
-                            df_cisalhamento[y_col],
-                            picker=True,
-                            label=arquivo
-                        )
-                        artists.append(sc)
+                    if df_cisalhamento.empty:
+                        continue
+                    cor_arquivo = cores_por_arquivo[arquivo]
+
+                    sc = ax.scatter(
+                        df_cisalhamento[x_col],
+                        df_cisalhamento[y_col],
+                        s=8,
+                        linewidths=0.5,
+                        edgecolors=cor_arquivo,
+                        facecolors='none',
+                        label=arquivo
+                    )
+                    artists.append(sc)
+
+                ax.grid(True)
                 ax.set_xlabel(x_col)
                 ax.set_ylabel(y_col)
                 ax.set_title(f"{y_col} x {x_col}")
+                # Retiramos ax.legend() para não mostrar legenda fixa
 
+            # Se sobraram eixos
             for i in range(num_plots, len(axs)):
                 fig.delaxes(axs[i])
 
             plt.tight_layout()
 
-            # 6) Criar janela Tk com barra de rolagem
+            # 5) Janela Tk com scrollbar
             graph_window = tk.Toplevel(self.root)
             graph_window.title(f"Gráficos da Amostra {amostra_selecionada}")
             graph_window.geometry("1280x960")
+
+            from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
             canvas = tk.Canvas(graph_window)
             scroll_y = tk.Scrollbar(graph_window, orient="vertical", command=canvas.yview)
             scroll_x = tk.Scrollbar(graph_window, orient="horizontal", command=canvas.xview)
             canvas.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
 
-            scroll_frame = tk.Frame(canvas)
-            scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-
-            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
             canvas.pack(side="left", fill="both", expand=True)
             scroll_y.pack(side="right", fill="y")
             scroll_x.pack(side="bottom", fill="x")
 
-            from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+            scroll_frame = tk.Frame(canvas)
+            scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
 
             canvas_plot = FigureCanvasTkAgg(fig, master=scroll_frame)
             canvas_plot.draw()
@@ -1620,22 +1622,27 @@ class InterfaceApp:
             toolbar.update()
             canvas_plot.get_tk_widget().pack()
 
+            # 6) Cursor hover: mostra (arquivo, x, y)
             cursor = mplcursors.cursor(artists, hover=True)
             @cursor.connect("add")
             def on_add(sel):
                 x, y = sel.target
-                sel.annotation.set_text(f"x: {x:.4f}\ny: {y:.4f}")
+                nome_arquivo = sel.artist.get_label()
+                sel.annotation.set_text(f"{nome_arquivo}\nx: {x:.4f}\ny: {y:.4f}")
 
-            # Botões extras
+            # 7) Botões extras
             button_frame = tk.Frame(scroll_frame)
             button_frame.pack(pady=10)
 
             tk.Button(button_frame, text="Configurar Escalas",
-                    command=lambda: self.configurar_escalas(fig, axs), width=20).pack(side="left", padx=10)
+                    command=lambda: self.configurar_escalas(fig, axs),
+                    width=20).pack(side="left", padx=10)
             tk.Button(button_frame, text="Filtrar Arquivos",
-                    command=lambda: self.filtrar_arquivos(graph_window, amostra_selecionada), width=20).pack(side="left", padx=10)
+                    command=lambda: self.filtrar_arquivos(graph_window, amostra_selecionada),
+                    width=20).pack(side="left", padx=10)
             tk.Button(button_frame, text="Sair",
-                    command=graph_window.destroy, width=20).pack(side="right", padx=10)
+                    command=graph_window.destroy,
+                    width=20).pack(side="right", padx=10)
 
         except KeyError as e:
             messagebox.showerror("Erro", f"Coluna não encontrada: {e}")
