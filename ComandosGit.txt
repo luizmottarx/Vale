@@ -1,17 +1,22 @@
-Adicionar o arquivo .py modificado: Como você quer comitar apenas os arquivos .py, adicione somente o arquivo modificado interface.py:
+-Faça um pull para integrar as alterações remotas:(se alterar em outro lugar)
+git pull origin main
+
+-Remover os arquivos do rastreamento do Git sem deletá-los localmente:
+git rm --cached (nome dos arquivos)
+
+
+
+1   -      Adicionar o arquivo .py modificado: Como você quer comitar apenas os arquivos .py, adicione somente o arquivo modificado interface.py:
 git add (nome do arquivo)
 
 
 
-Fazer o commit: Depois de adicionar o arquivo ao stage, faça o commit:
+2   -      Fazer o commit: Depois de adicionar o arquivo ao stage, faça o commit:
 git commit -m "Commit em $(date '%m-%d %H:%M')"
 
 
 
-Enviar as alterações para o repositório remoto: Agora que o commit foi feito, envie as alterações para o GitHub:
+3   -      Enviar as alterações para o repositório remoto: Agora que o commit foi feito, envie as alterações para o GitHub:
 git push origin main
 
 
-
-Remover os arquivos do rastreamento do Git sem deletá-los localmente:
-git rm --cached (nome dos arquivos)
