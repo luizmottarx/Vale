@@ -1,5 +1,3 @@
-# PreencherExcel.py
-
 import sqlite3
 import os
 from openpyxl import load_workbook
@@ -11,6 +9,21 @@ def safe_float_conversion(value):
         return float(value)
     except (ValueError, TypeError):
         return 0.0
+
+def encontrar_primeira_linha_vazia_grupo(sheet, col_indices, linha_inicial=1):
+    """
+    Encontra, para um grupo de colunas, a maior primeira linha vazia
+    dentre elas. Isso garante que o preenchimento será alinhado.
+    """
+    maior_primeira_livre = 0
+    for col_idx in col_indices:
+        linha = linha_inicial
+        while sheet.cell(row=linha, column=col_idx).value not in (None, ""):
+            linha += 1
+        # Mantém o maior índice de linha encontrado
+        if linha > maior_primeira_livre:
+            maior_primeira_livre = linha
+    return maior_primeira_livre
 
 def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado, metodo):
     # Determinar o modelo de planilha com base no TipoEnsaio
@@ -120,6 +133,7 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
             stage_data = {col: [data_dict[col][i] for i in indices] for col in colunas}
             return stage_data
 
+        # B_data e Adensamento_data para cada estágio exato
         B_data = get_stage_data(B_stage)
         adensamento_data = get_stage_data(Adensamento_stage)
 
@@ -135,82 +149,99 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
             print(f"Dados incompletos para o arquivo {arquivo}")
             continue
 
-        # Preencher dados do estágio B
-        b_rows = len(B_data.get('time_stage_start', []))
-        for i in range(b_rows):
-            sheet.cell(row=10 + i, column=1, value=B_data.get('time_stage_start', [])[i])  # A10 em diante
-            sheet.cell(row=10 + i, column=3, value=B_data.get('rad_press_Original', [])[i])  # C10 em diante
-            sheet.cell(row=10 + i, column=4, value=B_data.get('back_press_Original', [])[i])  # D10 em diante
-            sheet.cell(row=10 + i, column=5, value=B_data.get('pore_press_Original', [])[i])  # E10 em diante
-
-        # Preencher dados do estágio de Adensamento
-        ad_rows = len(adensamento_data.get('stage_no', []))
-        ad_columns = [
-            'stage_no', 'time_test_start', 'time_stage_start', 'rad_press_Original', 'rad_vol_Original',
-            'back_press_Original', 'back_vol_Original', 'load_cell_Original', 'pore_press_Original', 'ax_disp_Original'
+        # ========== ESTÁGIO B ==========
+        # Mapeamento: (coluna_no_data_dict, coluna_no_Excel)
+        b_map = [
+            ("time_stage_start", 1),   # A
+            ("rad_press_Original", 3), # C
+            ("back_press_Original", 4),# D
+            ("pore_press_Original", 5) # E
         ]
-        ad_column_indices = [38, 39, 40, 41, 42, 43, 44, 45, 46, 47]  # Colunas AL(38) a AU(47)
+        # Maior número de linhas (entre as colunas mapeadas)
+        b_rows = max(len(B_data.get(col_python, [])) for (col_python, _) in b_map)
 
-        for idx_row in range(ad_rows):
+        # Encontra a primeira linha livre considerando as colunas de B
+        b_col_indices = [col_excel for (_, col_excel) in b_map]
+        b_start_row = encontrar_primeira_linha_vazia_grupo(sheet, b_col_indices, linha_inicial=10)
+
+        for i in range(b_rows):
+            for (col_python, col_excel) in b_map:
+                col_list = B_data.get(col_python, [])
+                valor = col_list[i] if i < len(col_list) else None
+                sheet.cell(row=b_start_row + i, column=col_excel, value=valor)
+
+        # ========== ESTÁGIO ADENSAMENTO ==========
+        ad_columns = [
+            'stage_no', 'time_test_start', 'time_stage_start',
+            'rad_press_Original', 'rad_vol_Original', 'back_press_Original',
+            'back_vol_Original', 'load_cell_Original', 'pore_press_Original', 'ax_disp_Original'
+        ]
+        # AL=38 até AU=47 (10 colunas)
+        ad_column_indices = [col for col in range(38, 48)]  # 38..47
+
+        ad_max_rows = max(len(adensamento_data.get(col, [])) for col in ad_columns)
+
+        # Encontra a primeira linha livre considerando as colunas de Adensamento
+        ad_start_row = encontrar_primeira_linha_vazia_grupo(sheet, ad_column_indices, linha_inicial=7)
+
+        for idx_row in range(ad_max_rows):
             for idx_col, col_name in enumerate(ad_columns):
-                value = adensamento_data.get(col_name, [])[idx_row]
-                sheet.cell(row=7 + idx_row, column=ad_column_indices[idx_col], value=value)
+                col_list = adensamento_data.get(col_name, [])
+                value = col_list[idx_row] if idx_row < len(col_list) else None
+                sheet.cell(row=ad_start_row + idx_row, column=ad_column_indices[idx_col], value=value)
 
-        # Preencher dados do estágio de Cisalhamento
-        # Calcular pore_press_0 como o primeiro valor de pore_press_Original no estágio de cisalhamento
-        pore_press_0 = cis_data.get('pore_press_Original', [0])[0]
+        # ========== ESTÁGIO CISALHAMENTO ==========
 
-        # Calcular eff_rad_stress = rad_press_Original - pore_press_Original
-        eff_rad_stress = [rad_p - pore_p for rad_p, pore_p in zip(
-            cis_data.get('rad_press_Original', []),
-            cis_data.get('pore_press_Original', [])
-        )]
+        # 1) pore_press_0
+        pore_press_list = cis_data.get('pore_press_Original', [])
+        pore_press_0 = pore_press_list[0] if pore_press_list else 0
 
-        # Calcular eff_ax_stress_B = dev_stress_B + eff_rad_stress
+        # 2) eff_rad_stress
+        rad_press_list = cis_data.get('rad_press_Original', [])
+        eff_rad_stress = [rad_p - pore_p for rad_p, pore_p in zip(rad_press_list, pore_press_list)]
+
+        # 3) dev_stress_B
         dev_stress_B = cis_data.get('dev_stress_B', [])
         eff_ax_stress_B = [dev + eff_rad for dev, eff_rad in zip(dev_stress_B, eff_rad_stress)]
 
-        # Calcular stress_ratio = eff_ax_stress_B / eff_rad_stress
-        stress_ratio = [ea / er if er != 0 else None for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
+        # 4) stress_ratio
+        stress_ratio = [
+            ea / er if er != 0 else None
+            for ea, er in zip(eff_ax_stress_B, eff_rad_stress)
+        ]
 
-        # Calcular pore_press_diff = pore_press_Original - pore_press_0
-        pore_press_diff = [pp - pore_press_0 for pp in cis_data.get('pore_press_Original', [])]
+        # 5) pore_press_diff
+        pore_press_diff = [pp - pore_press_0 for pp in pore_press_list]
 
-        # Calcular eff_stress_avg = (eff_ax_stress_B + eff_rad_stress)/2
-        eff_stress_avg = [(ea + er)/2 for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
+        # 6) eff_stress_avg e eff_stress_diff
+        eff_stress_avg = [(ea + er) / 2 for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
+        eff_stress_diff = [(ea - er) / 2 for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
 
-        # Calcular eff_stress_diff = (eff_ax_stress_B - eff_rad_stress)/2
-        eff_stress_diff = [(ea - er)/2 for ea, er in zip(eff_ax_stress_B, eff_rad_stress)]
+        # 7) Ajustar back_vol_Original
+        back_vol_list = cis_data.get('back_vol_Original', [])
+        adjusted_back_vol_Original = []
+        if back_vol_list:
+            first_back_vol = back_vol_list[0]
+            adjusted_back_vol_Original = [val - first_back_vol for val in back_vol_list]
 
-        # Ajustar back_vol_Original subtraindo o primeiro valor no estágio
-        back_vol_Original = cis_data.get('back_vol_Original', [])
-        if back_vol_Original:
-            first_back_vol_Original = back_vol_Original[0]
-            adjusted_back_vol_Original = [value - first_back_vol_Original for value in back_vol_Original]
-        else:
-            adjusted_back_vol_Original = []
+        # 8) Ajustar ax_disp_Original
+        ax_disp_list = cis_data.get('ax_disp_Original', [])
+        adjusted_ax_disp_Original = []
+        if ax_disp_list:
+            first_ax_disp = ax_disp_list[0]
+            adjusted_ax_disp_Original = [val - first_ax_disp for val in ax_disp_list]
 
-        # Ajustar ax_disp_Original subtraindo o primeiro valor no estágio
-        ax_disp_Original = cis_data.get('ax_disp_Original', [])
-        if ax_disp_Original:
-            first_ax_disp_Original = ax_disp_Original[0]
-            adjusted_ax_disp_Original = [value - first_ax_disp_Original for value in ax_disp_Original]
-        else:
-            adjusted_ax_disp_Original = []
-
-        # Utilizar ax_strain sem multiplicar por 100
+        # 9) ax_strain_percent e corrected_deviator_stress
         ax_strain_percent = cis_data.get('ax_strain', [])
+        corrected_deviator_stress = dev_stress_B  # = q
 
-        # Calcular Corrected Deviator Stress (q) = dev_stress_B
-        corrected_deviator_stress = dev_stress_B
-
-        # Preparar dados para preenchimento
+        # Organiza dados para preencher
         cis_data_preenchimento = {
             'time_stage_start': cis_data.get('time_stage_start', []),
             'time_stage_start_div_60': [t / 60 for t in cis_data.get('time_stage_start', [])],
-            'rad_press_Original': cis_data.get('rad_press_Original', []),
+            'rad_press_Original': rad_press_list,
             'back_press_Original': cis_data.get('back_press_Original', []),
-            'pore_press_Original': cis_data.get('pore_press_Original', []),
+            'pore_press_Original': pore_press_list,
             'adjusted_back_vol_Original': adjusted_back_vol_Original,
             'adjusted_ax_disp_Original': adjusted_ax_disp_Original,
             'load_cell_Original': cis_data.get('load_cell_Original', []),
@@ -222,36 +253,29 @@ def gerar_planilha_para_arquivos(arquivos_selecionados, tipo_ensaio_selecionado,
             'eff_stress_diff': eff_stress_diff
         }
 
-        # Colunas a serem preenchidas e seus índices de coluna no Excel
+        # Mapeamento p/ Excel (R=18 até AE=31)
         cis_column_names = [
-            'time_stage_start',                  # R7
-            'time_stage_start_div_60',           # S7
-            'rad_press_Original',                # T7
-            'back_press_Original',               # U7
-            'pore_press_Original',               # V7
-            'adjusted_back_vol_Original',        # W7
-            'adjusted_ax_disp_Original',         # X7
-            'load_cell_Original',                # Y7
-            'ax_strain_percent',                 # Z7
-            'corrected_deviator_stress',         # AA7
-            'stress_ratio',                      # AB7
-            'pore_press_diff',                   # AC7
-            'eff_stress_avg',                    # AD7
-            'eff_stress_diff'                    # AE7
+            'time_stage_start', 'time_stage_start_div_60',
+            'rad_press_Original', 'back_press_Original',
+            'pore_press_Original', 'adjusted_back_vol_Original',
+            'adjusted_ax_disp_Original', 'load_cell_Original',
+            'ax_strain_percent', 'corrected_deviator_stress',
+            'stress_ratio', 'pore_press_diff',
+            'eff_stress_avg', 'eff_stress_diff'
         ]
-        cis_column_indices = [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]  # R(18) a AE(31)
+        cis_column_indices = [col for col in range(18, 32)]  # 18..31 (R..AE)
 
-        cis_rows_to_fill = len(cis_data_preenchimento['time_stage_start'])
+        cis_max_rows = max(len(cis_data_preenchimento[n]) for n in cis_column_names)
 
-        # Preencher os dados nas células especificadas
-        for idx_row in range(cis_rows_to_fill):
+        # Achar primeira linha livre para as colunas de cisalhamento
+        cis_start_row = encontrar_primeira_linha_vazia_grupo(sheet, cis_column_indices, linha_inicial=7)
+
+        # Preencher
+        for i in range(cis_max_rows):
             for idx_col, col_name in enumerate(cis_column_names):
-                value_list = cis_data_preenchimento[col_name]
-                if idx_row < len(value_list):
-                    value = value_list[idx_row]
-                else:
-                    value = None
-                sheet.cell(row=7 + idx_row, column=cis_column_indices[idx_col], value=value)
+                col_vals = cis_data_preenchimento[col_name]
+                val = col_vals[i] if i < len(col_vals) else None
+                sheet.cell(row=cis_start_row + i, column=cis_column_indices[idx_col], value=val)
 
     # Salvar e fechar o workbook
     wb.save(novo_arquivo)
