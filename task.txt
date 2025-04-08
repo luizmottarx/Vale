@@ -665,3 +665,4 @@ rad_press =rad_press_Original
 back_press = back_press_Original
 ax_force =load_cell_Original
 
+## chegar nova funcionalidade de analisar dois arquivos e duas colunas no novo botao comparar excel, para qualquer arquivo .csv e .xlsx
