@@ -666,3 +666,114 @@ back_press = back_press_Original
 ax_force =load_cell_Original
 
 ## chegar nova funcionalidade de analisar dois arquivos e duas colunas no novo botao comparar excel, para qualquer arquivo .csv e .xlsx
+
+PLANILHA ATUALIZADA 
+PLANILHAS MÉTODO A - Pseudocodigo:
+metadados calculados:
+
+init_dry_mass = init_mass / (1 + w_0)
+init_vol = h_init * ((d_init * d_init * PI()) /4)
+init_void_ratio = (init_vol - vol_solid) / vol_solid
+void_ratio_f = spec_grav * w_f
+final_void_vol   = vol_solid * void_ratio_f
+vol_solid = init_dray_mass * 1000 / spec_grav
+dry_unit_weight = init_dry_mass/(((((d_init/10)^2)*PI())/4)*(h_init/10))
+D_saturation =((spec_grav*w_0)/d_init)*100 
+D_spec_grav =  (init_dry_mass/(((((d_init/10)^2)*PI())/4)*(h_init/10)))
+pore_press_c = primeiro valor no estagio de cisalhamento da coluna pore_press_Original
+vol_change_f_c = diferença do primeiro valor de back_vol_Original do ultimo valor de back_vol_Original entre o estagio de cis inicial e cis final
+
+
+ax_disp_s = primeiro valor da coluna ax_disp_Original no estagio de adensamento
+ax_disp_0 = primeiro valor da coluna ax_disp_Original, primeiro valor da coluna toda
+hs = ax_disp_s - ax_disp_0
+
+vol_change_s = =SE(hs<0;0;3*v_0*(hs/h_init))
+
+cons_vol = v0 - vol_change_f_c - vol_change_s
+
+cons_void_vol_A = vol_solid - cons_vol
+
+post_cons_void_A = cons_void_vol_A / vol_solid
+
+consolidated_area_A = 0.000001*((v0 - vol_change_s - vol_change_f_c) / h_init_c)
+
+
+
+
+colunas calculadas:
+
+ax_strain  =(linha de ax_disp - ax_disp_c)/(h_init - linha de ax_disp)
+
+vol_strain_A =(back_vol_c - linha de back_vol)/(cons_void_vol_A + vol_solid)
+
+du_kpa = linha de pore_press - pore_press_c
+
+eff_rad_stress = linha de rad_press_Original - linha de pore_press_Original
+
+cur_area_A = consolidated_area_A * ((1-linha de vol_strain) / (1-linha de ax_strain))
+
+dev_stress_A = load / cur_area_A
+
+eff_ax_stress_A = linha de dev_stress_A +  linha de eff_rad_stress
+
+eff_camb_A = (linha de eff_rad_stress + linha de eff_rad_stress + linha de eff_ax_stress_A) / 3
+
+nqp_A = dev_stress_A / eff_camb_A
+
+m_A = GRAUS(ASEN((3*nqp_A)/(6+nqp_A)))
+
+void_ratio_A = (cons_void_vol_A - (back_vol_c - linha de back_vol_Original) / vol_solid)
+
+su_A = dev_stress_A / 2
+
+
+
+
+
+
+
+
+PLANILHAS - MÉTODO B - Pseudocodigo:
+metadados calculados:
+
+init_dry_mass = init_mass / (1 + w_0)
+init_vol = h_init * ((d_init * d_init * PI()) /4)
+init_void_ratio = (init_vol - vol_solid) / vol_solid
+void_ratio_f = spec_grav * w_f
+final_void_vol   = vol_solid * void_ratio_f
+vol_solid = init_dray_mass * 1000 / spec_grav
+cons_void_vol = final_void_vol + vol_change_f_c + vol_change_c
+post_cons_void = cons_void_vol / vol_solid
+consolidated_area = 0.000001*(cons_void_vol + vol_solid) / h_init_c
+dry_unit_weight = =init_dry_mass/(((((d_init/10)^2)*PI())/4)*(h_init/10))
+D_saturation =((spec_grav*w_0)/d_init)*100 
+D_spec_grav = = (init_dry_mass/(((((d_init/10)^2)*PI())/4)*(h_init/10)))
+pore_press_c = primeiro valor no estagio de cisalhamento da coluna pore_press_Original
+
+
+colunas calculadas:
+
+ax_strain  =(linha de ax_disp - ax_disp_c)/(h_init - linha de ax_disp)
+
+vol_strain_B =(back_vol_c - linha de back_vol)/(cons_void_vol + vol_solid)
+
+du_kpa = linha de pore_press_Original - pore_press_c
+
+eff_rad_stress = linha de rad_press_Original - linha de pore_press_Original
+
+cur_area_B = consolidated_area*((1-linha de vol_strain)/(1-linha de ax_strain))
+
+dev_stress_B = linha de load / linha de cur_area_B
+
+eff_ax_stress_B = linha de dev_stress_B +  linha de eff_rad_stress
+
+eff_camb_B = (linha de eff_rad_stress + linha de eff_rad_stress + linha de eff_ax_stress_B) / 3
+
+nqp_B = linha de dev_stress_B / linha de eff_camb_B
+
+m_B =GRAUS(ASEN((3*linha de nqp_B)/(6+linha de nqp_B)))
+
+void_ratio_B = (cons_void_vol-(back_vol_c - linha de back_vol_Original)) / vol_solid
+
+su_B = dev_stress_B / 2
