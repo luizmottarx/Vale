@@ -5,7 +5,6 @@ import pandas as pd
 import traceback
 import numpy as np
 
-
 # Exemplo de conversão segura para float
 ###############################################################################
 def safe_float_conversion(value, default=0.0):
@@ -16,16 +15,11 @@ def safe_float_conversion(value, default=0.0):
         return default
 
 ###############################################################################
-# Mapeamento de Metadados (Nome Legível -> Nome Abreviado/Coluna no BD)
-# Observação: B, Adensamento, Cisalhamento => _B, _ad, _cis
-###############################################################################
 METADADOS_MAPPING = {
     # Contrato, Campanha, Amostra
     "Job reference:": "idcontrato",
     "Borehole:": "idcampanha",
     "Sample Name:": "idamostra",
-
-    # B, Adensamento, Cisalhamento => underline
     "B": "_B",
     "Adensamento": "_ad",
     "Cisalhamento Inicial": "_cis_inicial",
@@ -90,7 +84,6 @@ METADADOS_MAPPING = {
     "dry_unit_weight": "dry_unit_weight",
     "init_void_ratio": "init_void_ratio",
     "init_sat": "init_sat",
-    "post_cons_void": "post_cons_void",
     "final_moisture": "final_moisture",
     "Saturacao_c": "Saturacao_c",
     "v_0": "v_0",
@@ -106,7 +99,6 @@ METADADOS_MAPPING = {
     "h_init_c": "h_init_c",
     "back_vol_f": "back_vol_f",
     "v_c_A": "v_c_A",
-    "cons_void_vol": "cons_void_vol",
     "v_c_B": "v_c_B",
     "w_c_A": "w_c_A",
     "w_c_B": "w_c_B",
@@ -116,10 +108,17 @@ METADADOS_MAPPING = {
     "vol_change_c": "vol_change_c",
     "vol_change_f_c": "vol_change_f_c",
     "final_void_vol": "final_void_vol",
-    "consolidated_area": "consolidated_area",
     "camb_p_A0": "camb_p_A0",
     "camb_p_B0": "camb_p_B0",
+    "pore_press_c" : "pore_press_c",
+    "cons_void_vol_A":"cons_void_vol_A",
+    "post_cons_void_A" : "post_cons_void_A",
+    "consolidated_area_A" : "consolidated_area_A",
+    "cons_void_vol_B" : "cons_void_vol_B",
+    "post_cons_void_B" : "post_cons_void_B",
+    "consolidated_area_B" : "consolidated_area_B",
 }
+
 
 ###############################################################################
 # Mapeamento de Tipos de Ensaio
@@ -145,6 +144,7 @@ TIPOENSAIO_MAP = {
     17: "TIR_S",
     18: "TIR_S_B"
 }
+
 
 class DatabaseManager:
     _instance = None
@@ -228,7 +228,6 @@ class DatabaseManager:
                 """)
 
                 # Tabela CP
-                # Correção 1: cp e repeticao => TEXT
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS Cp (
                         idnome INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -243,7 +242,8 @@ class DatabaseManager:
                         filename TEXT UNIQUE NOT NULL,
                         status TEXT,
                         FOREIGN KEY (idcontrato) REFERENCES Contrato(idcontrato),
-                        FOREIGN KEY (idcontrato, idcampanha) REFERENCES Campanha(idcontrato, idcampanha),
+                        FOREIGN KEY (idcontrato, idcampanha)
+                            REFERENCES Campanha(idcontrato, idcampanha),
                         FOREIGN KEY (idcontrato, idcampanha, idamostra)
                             REFERENCES Amostra(idcontrato, idcampanha, idamostra),
                         FOREIGN KEY (idtipoensaio) REFERENCES TipoEnsaio(idtipoensaio),
@@ -252,15 +252,13 @@ class DatabaseManager:
                 """)
 
                 # Tabela MetadadosArquivo
-                # Correção 2: remover colunas B, Adensamento, Cisalhamento sem underline
-                # Mantemos apenas _B, _ad, _cis
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS MetadadosArquivo (
                         idnome INTEGER PRIMARY KEY,
                         _B TEXT,
                         _ad TEXT,
-                        _cis_inicial TEXT,  
-                        _cis_final TEXT,    
+                        _cis_inicial TEXT,
+                        _cis_final TEXT,
                         w_0 REAL,
                         w_f REAL,
                         h_init REAL,
@@ -323,7 +321,6 @@ class DatabaseManager:
                         dry_unit_weight REAL,
                         init_void_ratio REAL,
                         init_sat REAL,
-                        post_cons_void REAL,
                         final_moisture REAL,
                         Saturacao_c REAL,
                         v_0 REAL,
@@ -339,7 +336,6 @@ class DatabaseManager:
                         h_init_c REAL,
                         back_vol_f REAL,
                         v_c_A REAL,
-                        cons_void_vol REAL,
                         v_c_B REAL,
                         w_c_A REAL,
                         w_c_B REAL,
@@ -349,9 +345,16 @@ class DatabaseManager:
                         vol_change_c REAL,
                         vol_change_f_c REAL,
                         final_void_vol REAL,
-                        consolidated_area REAL,
                         camb_p_A0 REAL,
                         camb_p_B0 REAL,
+                        pore_press_c REAL,
+                        cons_void_vol_A REAL,
+                        post_cons_void_A REAL,
+                        consolidated_area_A REAL,
+                        cons_void_vol_B REAL,
+                        post_cons_void_B REAL,
+                        consolidated_area_B REAL,
+
                         FOREIGN KEY (idnome) REFERENCES Cp(idnome)
                     )
                 """)
@@ -375,7 +378,7 @@ class DatabaseManager:
                         ax_strain_Original REAL,
                         avg_diam_chg_Original REAL,
                         rad_strain_Original REAL,
-                        ax_strain_Original_2 REAL,
+                        ax_strain REAL,
                         eff_ax_stress_Original REAL,
                         eff_rad_stress_Original REAL,
                         dev_stress_Original REAL,
@@ -390,55 +393,57 @@ class DatabaseManager:
                         b_value_Original REAL,
                         mean_stress_Original REAL,
                         ax_force REAL,
-                        load REAL,
                         rad_vol_delta REAL,
                         rad_vol REAL,
                         rad_press REAL,
                         back_press REAL,
                         back_vol_delta REAL,
                         back_vol REAL,
-                        ax_disp_delta REAL,
                         ax_disp REAL,
+                        ax_disp_delta REAL,
+                        cur_area_A REAL,
+                        cur_area_B REAL,
+                        diameter_A REAL,
+                        diameter_B REAL,
+                        rad_strain_A REAL,
+                        rad_strain_B REAL,
                         height REAL,
                         vol_A REAL,
                         vol_B REAL,
-                        cur_area_A REAL,
-                        cur_area_B REAL,
+                        vol_strain_A REAL,
+                        vol_strain_B REAL,
+                        void_ratio_A REAL,
+                        void_ratio_B REAL,
+                        load REAL,
+                        ax_stress REAL,
+                        eff_ax_stress_A REAL,
+                        eff_ax_stress_B REAL,
                         eff_rad_stress REAL,
                         dev_stress_A REAL,
                         dev_stress_B REAL,
-                        ax_stress REAL,
-                        ax_strain REAL,
-                        vol_strain REAL,
-                        void_ratio_B REAL,
-                        void_ratio_A REAL,
-                        eff_ax_stress_A REAL,
-                        eff_ax_stress_B REAL,
                         eff_stress_rat_A REAL,
                         eff_stress_rat_B REAL,
-                        eff_camb_A REAL,
-                        eff_camb_B REAL,
+                        shear_strain_A REAL,
+                        shear_strain_B REAL,
                         camb_p_A REAL,
                         camb_p_B REAL,
+                        eff_camb_A REAL,
+                        eff_camb_B REAL,
                         max_shear_stress_A REAL,
                         max_shear_stress_B REAL,
-                        excessPWP REAL,
-                        du_kpa REAL,
-                        nqp_A REAL,
-                        nqp_B REAL,
-                        m_A REAL,
-                        m_B REAL,
-                        shear_strain REAL,
-                        diameter_A REAL,
-                        diameter_B REAL,
-                        b_val REAL,
+                        avg_mean_stress REAL,
                         avg_eff_stress_A REAL,
                         avg_eff_stress_B REAL,
-                        avg_mean_stress REAL,
-                        rad_strain_A REAL,
-                        rad_strain_B REAL,
+                        b_val REAL,
+                        excessPWP REAL,
                         su_A REAL,
                         su_B REAL,
+                        nqp_B REAL,
+                        nqp_A REAL,
+                        m_A REAL,
+                        m_B REAL,
+                        du_kpa REAL,
+
                         FOREIGN KEY (idnome) REFERENCES Cp(idnome)
                     )
                 """)
@@ -453,7 +458,6 @@ class DatabaseManager:
                 """)
 
                 # GranulometriaA
-                # Correção 3: idensaio como PK + FOREIGN KEY
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS GranulometriaA (
                         idensaio INTEGER PRIMARY KEY,
@@ -462,7 +466,6 @@ class DatabaseManager:
                 """)
 
                 # GranulometriaCP
-                # Correção 4: idnome como PK + FOREIGN KEY
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS GranulometriaCP (
                         idnome INTEGER PRIMARY KEY,
@@ -587,12 +590,6 @@ class DatabaseManager:
         """
         Recebe uma lista de filenames e retorna uma lista de dicionários com os dados de EnsaiosTriaxiais
         e 'NomeCompleto' (nome do arquivo).
-
-        Args:
-            filenames (list): Lista de strings com os nomes dos arquivos.
-
-        Returns:
-            list: Lista de dicionários, cada dicionário contém os campos de EnsaiosTriaxiais e 'NomeCompleto'.
         """
         try:
             if not filenames:
@@ -695,7 +692,6 @@ class DatabaseManager:
             traceback.print_exc()
             return {}
 
-
     def get_arquivos_by_status_individual(self, status):
         try:
             c = self.conn.execute("SELECT filename FROM Cp WHERE status=?", (status,))
@@ -709,7 +705,6 @@ class DatabaseManager:
         try:
             c = self.conn.execute("SELECT idamostra FROM Amostra")
             amostras = list({row[0] for row in c.fetchall()})
-            #print(f"Amostras: {len(amostras)}")
             return amostras
         except Exception as e:
             print(f"Erro get_amostras: {e}")
@@ -753,9 +748,7 @@ class DatabaseManager:
             if cursor.rowcount == 0:
                 raise ValueError(f"Arquivo '{filename}' não encontrado na tabela Cp.")
             self.conn.commit()
-            #logging.info(f"Status do arquivo '{filename}' atualizado para '{novo_status}'.")
         except Exception as e:
-            #logging.error(f"Erro ao atualizar status do arquivo '{filename}': {e}")
             traceback.print_exc()
             raise e
 
@@ -809,8 +802,10 @@ class DatabaseManager:
             self.conn = None
 
     # Correção 3: GranulometriaA => PK = idensaio
-    # Precisamos usar INSERT OR REPLACE se for 1:1
     def save_granulometriaA(self, idensaio, list_of_rows):
+        """
+        Relação 1:1 => Use INSERT OR REPLACE
+        """
         if not list_of_rows:
             return
         cursor = self.conn.cursor()
@@ -822,8 +817,10 @@ class DatabaseManager:
         print(f"Salvos {len(list_of_rows)} registros em GranulometriaA p/ idensaio={idensaio}.")
 
     # Correção 4: GranulometriaCP => PK = idnome
-    # idem 1:1 => INSERT OR REPLACE
     def save_granulometriaCP(self, idnome, list_of_rows):
+        """
+        Relação 1:1 => Use INSERT OR REPLACE
+        """
         if not list_of_rows:
             return
         cursor = self.conn.cursor()
@@ -843,9 +840,9 @@ class DatabaseManager:
             cursor = self.conn.execute("SELECT 1 FROM TipoEnsaio WHERE idtipoensaio = ?", (idtipoensaio,))
             return cursor.fetchone() is not None
         except Exception as e:
-            #logging.error(f"Erro ao verificar TipoEnsaio {idtipoensaio}: {e}")
             traceback.print_exc()
             return False
+
     ##########################################################################
     # save_to_database
     ##########################################################################
@@ -878,9 +875,7 @@ class DatabaseManager:
                 return value
 
         try:
-            # -------------------------------------------------------------------
-            # Caso não exista "sequencial", tentar extrair de "Description of Sample:"
-            # Forçar '00' se não encontrar, para evitar erro de "sequencial está vazio"
+            # Se não houver "sequencial", tenta extrair de "Description of Sample:"
             desc_value = str(metadados.get("Description of Sample:", "")).strip()
             if not metadados.get("sequencial"):
                 match_desc = re.match(r"(\d+)[Ss](\d+)", desc_value)
@@ -889,23 +884,21 @@ class DatabaseManager:
                 else:
                     metadados["sequencial"] = "00"
 
-            # -------------------------------------------------------------------
             # Campos principais
-            idcontrato  = metadados.get("idcontrato", "")
-            idcampanha  = metadados.get("idcampanha", "")
-            idamostra   = metadados.get("idamostra", "")
-            idtipoensaio = metadados.get("idtipoensaio", 0)  # int
+            idcontrato   = metadados.get("idcontrato", "")
+            idcampanha   = metadados.get("idcampanha", "")
+            idamostra    = metadados.get("idamostra", "")
+            idtipoensaio = metadados.get("idtipoensaio", 0)
 
-            # Ajustar sequencial, cp, repeticao
+            # Ajustar strings
             sequencial = safe_str(metadados.get("sequencial", ""))
             cp_str     = safe_str(metadados.get("cp", ""))
             rep_str    = safe_str(metadados.get("repeticao", ""))
 
-            # Converter possíveis tipos em metadados
+            # Converter tipos em metadados
             for key in metadados:
                 metadados[key] = convert_numpy_types(metadados[key])
 
-            # -------------------------------------------------------------------
             # Validações obrigatórias
             if not idcontrato:
                 raise ValueError("idcontrato está vazio.")
@@ -926,7 +919,6 @@ class DatabaseManager:
                 if not self.is_tipo_ensaio_valid(tipo_num):
                     raise ValueError("TipoEnsaio inválido e 'UNKNOWN' não encontrado.")
 
-            # -------------------------------------------------------------------
             # Inserir Contrato / Campanha / Amostra
             cursor.execute("INSERT OR IGNORE INTO Contrato (idcontrato) VALUES (?)", (idcontrato,))
             cursor.execute("""
@@ -964,8 +956,7 @@ class DatabaseManager:
             ))
             idnome = cursor.lastrowid
 
-            # -------------------------------------------------------------------
-            # Preparar metadados para MetadadosArquivo
+            # Preparar metadados para inserir em MetadadosArquivo
             metadados_columns = [
                 "_B","_ad","_cis_inicial","_cis_final",
                 "w_0","w_f","h_init","d_init","sequencial","ram_diam","spec_grav",
@@ -977,16 +968,16 @@ class DatabaseManager:
                 "mass_silt","mass_clay","mass_coll","trim_proc","moist_cond","ax_stress_inund","water_desc",
                 "test_meth","interp_cv","astm_dep","wc_obt","sat_meth","post_consol_area","fail_crit",
                 "load_filt_paper","filt_paper_cov","young_mod_mem","test_time","test_date","start_rep_data",
-                "dry_unit_weight","init_void_ratio","init_sat","post_cons_void","final_moisture","Saturacao_c",
+                "dry_unit_weight","init_void_ratio","init_sat","final_moisture","Saturacao_c",
                 "v_0","vol_solid","v_w_f","ax_disp_0","back_vol_0","back_press_0","rad_press_0","pore_press_0",
-                "ax_disp_c","back_vol_c","h_init_c","back_vol_f","v_c_A","cons_void_vol","v_c_B","w_c_A","w_c_B",
+                "ax_disp_c","back_vol_c","h_init_c","back_vol_f","v_c_A","v_c_B","w_c_A","w_c_B",
                 "void_ratio_c","void_ratio_f","void_ratio_m","vol_change_c","vol_change_f_c","final_void_vol",
-                "consolidated_area","camb_p_A0","camb_p_B0"
+                "consolidated_area_A","consolidated_area_B","pore_press_c","cons_void_vol_A","cons_void_vol_B","camb_p_A0","camb_p_B0"
             ]
 
             metadados_db = {}
             for legivel, abv in METADADOS_MAPPING.items():
-                if abv != "idtipoensaio":
+                if abv != "idtipoensaio":  # já usamos acima
                     metadados_db[abv] = metadados.get(abv, None)
 
             metadados_db["sequencial"] = sequencial.zfill(2)
@@ -1003,6 +994,7 @@ class DatabaseManager:
                 VALUES ({placeholders})
             """, vals)
 
+            # Inserir dados em EnsaiosTriaxiais
             inserted_rows = 0
             ensaios_columns = df_to_save.columns.tolist()
             ensaios_columns_with_id = ["idnome"] + ensaios_columns
@@ -1019,7 +1011,7 @@ class DatabaseManager:
                 """, insert_data)
                 inserted_rows += 1
 
-            # inserir estágios cisalhamento
+            # inserir estágios cisalhamento (exemplo: 8 a 11)
             for stage_no in range(8, 12):
                 cursor.execute("""
                     INSERT INTO EnsaiosTriaxiais (idnome, stage_no)
@@ -1027,6 +1019,7 @@ class DatabaseManager:
                 """, (idnome, stage_no))
                 inserted_rows += 1
 
+            # Se houver dados de granulometria
             if "granA_data" in metadados:
                 self.save_granulometriaA(idensaio, metadados["granA_data"])
             if "granCP_data" in metadados:
@@ -1045,7 +1038,8 @@ class DatabaseManager:
         except Exception as e:
             print(f"Erro ao salvar no banco de dados: {e}")
             traceback.print_exc()
-            
+
+
 import os
 import sys
 

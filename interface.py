@@ -147,14 +147,8 @@ class InterfaceApp:
         tk.Button(frame, text="Ver Arquivos Aprovados", command=self.ver_arquivos_aprovados, width=30).pack(pady=10)
         tk.Button(frame, text="Ver Arquivos Refugados", command=self.ver_arquivos_refugados, width=30).pack(pady=10)
         tk.Button(frame, text="Gerar Planilha Cliente", command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
-
-        # >>> NOVO BOTÃO PARA TRIAXIAL CÍCLICO <<<
-        tk.Button(
-            frame,
-            text="Encontrar Arquivos Triaxial Cíclico",
-            command=self.open_triaxial_ciclico_window,  # chama método abaixo
-            width=30
-        ).pack(pady=10)
+        tk.Button(frame, text="Encontrar Arquivos Triaxial Cíclico", command=self.open_triaxial_ciclico_window, width=30).pack(pady=10)
+        tk.Button(frame, text="Comparar Arquivos Excel/CSV", command=self.compare_excel_screen, width=30).pack(pady=10)
 
         tk.Button(frame, text="Sair", command=self.root.quit, width=30).pack(pady=10)
 
@@ -460,7 +454,6 @@ class InterfaceApp:
             "dry_unit_weight": "dry_unit_weight",
             "init_void_ratio": "init_void_ratio",
             "init_sat": "init_sat",
-            "post_cons_void": "post_cons_void",
             "final_moisture": "final_moisture",
             "Saturacao_c": "Saturacao_c",
             "v_0": "v_0",
@@ -476,7 +469,8 @@ class InterfaceApp:
             "h_init_c": "h_init_c",
             "back_vol_f": "back_vol_f",
             "v_c_A": "v_c_A",
-            "cons_void_vol": "cons_void_vol",
+            "cons_void_vol_A": "cons_void_vol_A",
+            "cons_void_vol_B": "cons_void_vol_B",
             "v_c_B": "v_c_B",
             "w_c_A": "w_c_A",
             "w_c_B": "w_c_B",
@@ -486,7 +480,8 @@ class InterfaceApp:
             "vol_change_c": "vol_change_c",
             "vol_change_f_c": "vol_change_f_c",
             "final_void_vol": "final_void_vol",
-            "consolidated_area": "consolidated_area",
+            "consolidated_area_A": "consolidated_area_A",
+            "consolidated_area_B": "consolidated_area_B",            
             "camb_p_A0": "camb_p_A0",
             "camb_p_B0": "camb_p_B0"
         }
@@ -1213,14 +1208,7 @@ class InterfaceApp:
             return default
         
     def plotar_graficos_arquivo(self, arquivo_selecionado):
-        """
-        Carrega os dados do arquivo selecionado e plota 12 gráficos
-        referentes ao estágio de cisalhamento, usando a coluna du_kpa
-        (no lugar de du_kpa_A e du_kpa_B).
-        
-        Requer que o DataFrame possua 'du_kpa'.
-        Faz scatter sem linha, sem legenda fixa (label aparece no hover).
-        """
+
         try:
             # 1) Obter dados do arquivo (DataFrame do banco)
             data = self.db_manager.get_data_for_file(arquivo_selecionado)
@@ -1250,7 +1238,8 @@ class InterfaceApp:
                 'dev_stress_A', 'dev_stress_B',
                 'eff_camb_A', 'eff_camb_B',
                 'du_kpa',  # agora é apenas 'du_kpa'
-                'vol_strain',
+                'vol_strain_A',
+                'vol_strain_B',
                 'void_ratio_A', 'void_ratio_B',
                 'nqp_A', 'nqp_B',
                 'm_A', 'm_B',
@@ -1279,8 +1268,9 @@ class InterfaceApp:
                 ('dev_stress_B', 'ax_strain'),   # 2
                 ('dev_stress_A', 'eff_camb_A'),  # 3
                 ('dev_stress_B', 'eff_camb_B'),  # 4
-                ('du_kpa',       'ax_strain'),   # 5 (coluna nova, substituindo du_kpa_A / du_kpa_B)
-                ('vol_strain',   'ax_strain'),   # 6
+                ('du_kpa',       'ax_strain'),   # 5 
+                ('vol_strain_A',   'ax_strain'),
+                ('vol_strain_B',    'ax_strain'),   # 6
                 ('void_ratio_A', 'eff_camb_A'),  # 7
                 ('void_ratio_B', 'eff_camb_B'),  # 8
                 ('nqp_A',        'ax_strain'),   # 9
@@ -1912,6 +1902,159 @@ class InterfaceApp:
     def clear_screen(self):
         for widget in self.root.winfo_children():
             widget.destroy()
+
+################################## COMPARAR EXCEL, DUAS COLUNAS
+    def compare_excel_screen(self):
+        """
+        Abre uma tela no Tkinter para:
+        1) Escolher 2 arquivos Excel/CSV.
+        2) Selecionar 1 coluna de cada arquivo.
+        3) Plotar gráficos comparativos e a diferença entre as colunas.
+        """
+        self.clear_screen()
+        self.root.title("Comparar Dois Arquivos Excel/CSV")
+
+        frame = tk.Frame(self.root)
+        frame.pack(pady=20)
+
+        # Variáveis para guardar caminhos dos arquivos e DataFrames
+        self.file1_path = None
+        self.file2_path = None
+        self.df1 = None
+        self.df2 = None
+
+        # FUNÇÃO: Escolher Arquivo 1
+        def escolher_arquivo1():
+            path = filedialog.askopenfilename(
+                title="Selecione o primeiro arquivo Excel ou CSV",
+                filetypes=[
+                    ("Excel e CSV", "*.xlsx *.xls *.csv"),
+                    ("Excel", "*.xlsx *.xls"),
+                    ("CSV", "*.csv"),
+                    ("Todos os arquivos", "*.*")
+                ]
+            )
+            if path:
+                self.file1_path = path
+                arquivo1_label.config(text=f"Arquivo 1: {path}")
+                try:
+                    # Ler o arquivo com nosso método auxiliar
+                    self.df1 = self.ler_excel_csv(path)
+                    colunas1_listbox.delete(0, tk.END)
+                    for col in self.df1.columns:
+                        colunas1_listbox.insert(tk.END, col)
+                except Exception as e:
+                    messagebox.showerror("Erro", f"Falha ao ler arquivo 1:\n{e}")
+
+        # FUNÇÃO: Escolher Arquivo 2
+        def escolher_arquivo2():
+            path = filedialog.askopenfilename(
+                title="Selecione o segundo arquivo Excel ou CSV",
+                filetypes=[
+                    ("Excel e CSV", "*.xlsx *.xls *.csv"),
+                    ("Excel", "*.xlsx *.xls"),
+                    ("CSV", "*.csv"),
+                    ("Todos os arquivos", "*.*")
+                ]
+            )
+            if path:
+                self.file2_path = path
+                arquivo2_label.config(text=f"Arquivo 2: {path}")
+                try:
+                    # Ler o arquivo com nosso método auxiliar
+                    self.df2 = self.ler_excel_csv(path)
+                    colunas2_listbox.delete(0, tk.END)
+                    for col in self.df2.columns:
+                        colunas2_listbox.insert(tk.END, col)
+                except Exception as e:
+                    messagebox.showerror("Erro", f"Falha ao ler arquivo 2:\n{e}")
+
+        # Botões para escolher os arquivos
+        tk.Button(frame, text="Escolher Arquivo 1", command=escolher_arquivo1, width=30).pack(pady=5)
+        arquivo1_label = tk.Label(frame, text="(Nenhum arquivo selecionado)")
+        arquivo1_label.pack(pady=5)
+
+        tk.Button(frame, text="Escolher Arquivo 2", command=escolher_arquivo2, width=30).pack(pady=5)
+        arquivo2_label = tk.Label(frame, text="(Nenhum arquivo selecionado)")
+        arquivo2_label.pack(pady=5)
+
+        # Listboxes para exibir as colunas de cada arquivo
+        # Agora com selectmode=SINGLE e exportselection=False
+        tk.Label(frame, text="Colunas do Arquivo 1:").pack(pady=5)
+        colunas1_listbox = tk.Listbox(frame, width=50, height=6,
+                                    selectmode=tk.SINGLE,
+                                    exportselection=False)
+        colunas1_listbox.pack()
+
+        tk.Label(frame, text="Colunas do Arquivo 2:").pack(pady=5)
+        colunas2_listbox = tk.Listbox(frame, width=50, height=6,
+                                    selectmode=tk.SINGLE,
+                                    exportselection=False)
+        colunas2_listbox.pack()
+
+        # FUNÇÃO: Comparar Colunas Selecionadas
+        def comparar_colunas():
+            if self.df1 is None or self.df2 is None:
+                messagebox.showerror("Erro", "Selecione primeiro ambos os arquivos.")
+                return
+
+            sel1 = colunas1_listbox.curselection()
+            sel2 = colunas2_listbox.curselection()
+            if not sel1 or not sel2:
+                messagebox.showerror("Erro", "Selecione uma coluna de cada arquivo.")
+                return
+
+            col1 = colunas1_listbox.get(sel1[0])
+            col2 = colunas2_listbox.get(sel2[0])
+
+            try:
+                # Converter as colunas para numérico e remover valores inválidos
+                serie1 = pd.to_numeric(self.df1[col1], errors='coerce').dropna()
+                serie2 = pd.to_numeric(self.df2[col2], errors='coerce').dropna()
+
+                # Alinha as séries ao mesmo tamanho
+                min_len = min(len(serie1), len(serie2))
+                if min_len == 0:
+                    messagebox.showerror("Erro", "Não há dados válidos em uma das colunas selecionadas.")
+                    return
+
+                serie1 = serie1.iloc[:min_len].reset_index(drop=True)
+                serie2 = serie2.iloc[:min_len].reset_index(drop=True)
+
+                # Cria um DataFrame combinado
+                df_combined = pd.DataFrame({
+                    'Index': range(min_len),
+                    f'{col1}': serie1,
+                    f'{col2}': serie2
+                }).set_index('Index')
+
+                # Calcula a diferença entre as colunas
+                df_combined['Diferença'] = df_combined.iloc[:, 0] - df_combined.iloc[:, 1]
+
+                # Chama o método para plotar os gráficos
+                self.plot_comparacao(df_combined, col1, col2)
+            except Exception as e:
+                messagebox.showerror("Erro ao comparar colunas", str(e))
+
+        tk.Button(frame, text="Comparar & Plotar", command=comparar_colunas, width=30).pack(pady=10)
+        tk.Button(frame, text="Voltar ao Menu", command=self.create_main_menu, width=30).pack(pady=10)
+
+    def ler_excel_csv(self, caminho):
+        """
+        Método auxiliar para ler arquivos Excel ou CSV.
+        Deve estar dentro da mesma classe, com indentação correta.
+        """
+        nome_arquivo = caminho.lower()
+        if nome_arquivo.endswith('.xlsx') or nome_arquivo.endswith('.xls'):
+            return pd.read_excel(caminho)
+        elif nome_arquivo.endswith('.csv'):
+            return pd.read_csv(caminho, delimiter=';', on_bad_lines='skip')
+        else:
+            raise ValueError(f"Formato não suportado: {caminho}")
+
+
+
+#######################################################
 import os
 import sys
 import tkinter as tk
@@ -2358,4 +2501,3 @@ if __name__ == "__main__":
     app = InterfaceApp(root)
     root.mainloop()
     print("FECHOU APLICAÇÃO")
-
