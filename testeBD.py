@@ -958,6 +958,7 @@ class DatabaseManager:
 
             # Preparar metadados para inserir em MetadadosArquivo
             metadados_columns = [
+                # 1) Já existentes no cabeçalho do seu array (se desejar manter):
                 "_B","_ad","_cis_inicial","_cis_final",
                 "w_0","w_f","h_init","d_init","sequencial","ram_diam","spec_grav",
                 "idcontrato","idcampanha","idamostra","depth","samp_date","tipo",
@@ -968,12 +969,44 @@ class DatabaseManager:
                 "mass_silt","mass_clay","mass_coll","trim_proc","moist_cond","ax_stress_inund","water_desc",
                 "test_meth","interp_cv","astm_dep","wc_obt","sat_meth","post_consol_area","fail_crit",
                 "load_filt_paper","filt_paper_cov","young_mod_mem","test_time","test_date","start_rep_data",
-                "dry_unit_weight","init_void_ratio","init_sat","final_moisture","Saturacao_c",
-                "v_0","vol_solid","v_w_f","ax_disp_0","back_vol_0","back_press_0","rad_press_0","pore_press_0",
-                "ax_disp_c","back_vol_c","h_init_c","back_vol_f","v_c_A","v_c_B","w_c_A","w_c_B",
-                "void_ratio_c","void_ratio_f","void_ratio_m","vol_change_c","vol_change_f_c","final_void_vol",
-                "consolidated_area_A","consolidated_area_B","pore_press_c","cons_void_vol_A","cons_void_vol_B","camb_p_A0","camb_p_B0"
+
+                # 2) Metadados computados na classe METADADOS_PARTE2:
+                "dry_unit_weight",       # self.dry_unit_weight
+                "init_void_ratio",       # self.init_void_ratio
+                "init_sat",              # self.init_sat
+                "final_moisture",        # self.final_moisture
+                "Saturacao_c",           # self.Saturacao_c
+                "v_0",                   # self.v_0
+                "vol_solid",             # self.vol_solid
+                "v_w_f",                 # self.v_w_f
+                "ax_disp_0",            # self.ax_disp_0
+                "back_vol_0",           # self.back_vol_0
+                "back_press_0",         # self.back_press_0
+                "rad_press_0",          # self.rad_press_0
+                "pore_press_0",         # self.pore_press_0
+
+                "ax_disp_c",            # self.ax_disp_c
+                "back_vol_c",           # self.back_vol_c
+                "h_init_c",             # self.h_init_c
+                "void_ratio_c",         # self.void_ratio_c
+                "void_ratio_f",         # self.void_ratio_f
+                "final_void_vol",       # self.final_void_vol
+
+                "vol_change_c",         # self.vol_change_c
+                "vol_change_f_c",       # self.vol_change_f_c
+
+                "cons_void_vol_A",      # self.cons_void_vol_A
+                "cons_void_vol_B",      # self.cons_void_vol_B
+                "post_cons_void_A",     # self.post_cons_void_A
+                "post_cons_void_B",     # self.post_cons_void_B
+
+                "consolidated_area_A",  # self.consolidated_area_A
+                "consolidated_area_B",  # self.consolidated_area_B
+                "pore_press_c",         # self.pore_press_c
+                "camb_p_A0",            # self.camb_p_A0
+                "camb_p_B0",            # self.camb_p_B0
             ]
+
 
             metadados_db = {}
             for legivel, abv in METADADOS_MAPPING.items():
