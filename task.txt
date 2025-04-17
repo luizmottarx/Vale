@@ -777,3 +777,23 @@ m_B =GRAUS(ASEN((3*linha de nqp_B)/(6+linha de nqp_B)))
 void_ratio_B = (cons_void_vol-(back_vol_c - linha de back_vol_Original)) / vol_solid
 
 su_B = dev_stress_B / 2
+
+
+
+----16/04           @luizmottarx
+Cálculos corrigidos.
+
+Adicionar outliers no gráfico da amostra adicionando o ( = ultimo valor do stage de cisalhamento da coluna eff_camb_A e eff_camb_B && = ultimo valor de void_ratio_A e void_ratio_B),
+(tem que ser uma bola maior de outra cor do grafico, esse grafico tem que ser os graficos unificados da amostra)                                                                        okok
+
+Corrigir escalas de ax_strain para porcentagem, sair de 0.05 para 5 etc... ######################
+
+Analisar sobre o quadro resumo, analisar como fazer o controle dentro do app. ###################
+
+Correção de . e , leitura dos arquivos, criado um novo codigo chamado teste, para fazer uma verificação antes de rodar o arquivo.                                                       okok
+
+
+--------
+Planilha mike, button calculate configurado dinamicamente para qualquer janela.                                                                                                         okok
+
+Verificar demanda de automação nas paginas de ensaios drenados e não drenados. #################                                                                                                    
