@@ -7,6 +7,7 @@ import os
 import io
 import sys
 import matplotlib.pyplot as plt
+from teste   import fix_gds 
 from teste1 import FileProcessor
 from teste2 import StageProcessor
 from teste3 import TableProcessor, CisalhamentoData # Certifique-se de que o nome do arquivo está correto
@@ -318,6 +319,7 @@ class InterfaceApp:
         self.selected_file = self.file_listbox.get(index)
         directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
         file_path = os.path.join(directory, self.selected_file)
+        file_path = fix_gds(file_path)
         self.file_path = file_path
 
         processor = FileProcessor(directory)
@@ -2206,6 +2208,7 @@ class TriaxialCiclicoWindow(tk.Frame):
         if not file_path:
             return  # Usuário cancelou
         try:
+            file_path = fix_gds(file_path)
             directory = resource_path('LUIZ-Teste')
             self.first_file_path = file_path
             # 1) Ler os metadados (linhas antes de "Stage Number")
@@ -2281,6 +2284,7 @@ class TriaxialCiclicoWindow(tk.Frame):
         if not file_path:
             return
         try:
+            file_path = fix_gds(file_path)
             header_line = find_header_line(file_path)
             if header_line is None:
                 raise ValueError("Não encontrou 'Stage Number' no arquivo adicional.")
