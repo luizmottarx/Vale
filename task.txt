@@ -797,3 +797,11 @@ Correção de . e , leitura dos arquivos, criado um novo codigo chamado teste, p
 Planilha mike, button calculate configurado dinamicamente para qualquer janela.                                                                                                         okok
 
 Verificar demanda de automação nas paginas de ensaios drenados e não drenados. #################                                                                                                    
+
+
+//////////////////////////
+editar tipos de status, na aplicação (NV, nao verificado    ,   Aprovado,   Refugado,   'Em análise')
+
+verificar como adicionar isso ao quadro resumo dentro da aplicação
+
+desenvolver automação planilha do mike, duplicar automatico e aumentar uma linha no sumary and resume
