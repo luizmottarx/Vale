@@ -39,7 +39,7 @@ class InterfaceApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Sistema de Gerenciamento de Ensaios")
-        self.root.geometry("800x600")
+        self.root.geometry("1000x800")
         self.root.resizable(False, False)
         self.db_manager = DatabaseManager()
         self.user_type = None
@@ -141,17 +141,18 @@ class InterfaceApp:
         frame.pack(pady=50)
 
         if self.user_type == "admin":
-            tk.Button(frame, text="Adicionar Usuário",                  command=self.add_user_screen, width=30).pack(pady=10)
-            tk.Button(frame, text="Gerenciar Usuários",                 command=self.manage_users_screen, width=30).pack(pady=10)
+            tk.Button(frame, text="Adicionar Usuário",                  command=self.add_user_screen,                   width=30).pack(pady=10)
+            tk.Button(frame, text="Gerenciar Usuários",                 command=self.manage_users_screen,               width=30).pack(pady=10)
 
-        tk.Button(frame, text="Encontrar Arquivos",                     command=self.find_files, width=30).pack(pady=10)
-        tk.Button(frame, text="Verificar Ensaio",                       command=self.verificar_ensaio_screen, width=30).pack(pady=10)
-        tk.Button(frame, text="Ver Arquivos Aprovados",                 command=self.ver_arquivos_aprovados, width=30).pack(pady=10)
-        tk.Button(frame, text="Ver Arquivos Refugados",                 command=self.ver_arquivos_refugados, width=30).pack(pady=10)
-        tk.Button(frame, text="Gerar Planilha Cliente",                 command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
-        tk.Button(frame, text="Juntar Arquivos",                        command=self.open_triaxial_ciclico_window, width=30).pack(pady=10)
-        tk.Button(frame, text="Comparar Arquivos Excel/CSV",            command=self.compare_excel_screen, width=30).pack(pady=10)
-        tk.Button(frame, text="Tabela Resumo ",                         command=self.tabela_resumo_amostra, width=30).pack(pady=10)
+        tk.Button(frame, text="Encontrar Arquivos",                     command=self.find_files,                        width=30).pack(pady=10)
+        tk.Button(frame, text="Verificar Ensaio",                       command=self.verificar_ensaio_screen,           width=30).pack(pady=10)
+        tk.Button(frame, text="Ver Arquivos Aprovados",                 command=self.ver_arquivos_aprovados,            width=30).pack(pady=10)
+        tk.Button(frame, text="Ver Arquivos Refugados",                 command=self.ver_arquivos_refugados,            width=30).pack(pady=10)
+        tk.Button(frame, text="Gerar Planilha Cliente",                 command=self.gerar_planilha_cliente_screen,     width=30).pack(pady=10)
+        tk.Button(frame, text="Juntar Arquivos",                        command=self.open_triaxial_ciclico_window,      width=30).pack(pady=10)
+        tk.Button(frame, text="Comparar Arquivos Excel/CSV",            command=self.compare_excel_screen,              width=30).pack(pady=10)
+        tk.Button(frame, text="Tabela Resumo ",                         command=self.tabela_resumo_amostra,             width=30).pack(pady=10)
+        tk.Button(frame, text="Editar Arquivo Salvo",                   command=self.editar_arquivo_screen,             width=30).pack(pady=10)
 
 
         tk.Button(frame, text="Sair",                                   command=self.root.quit, width=30).pack(pady=10)
@@ -191,6 +192,128 @@ class InterfaceApp:
 
         tk.Button(button_frame, text="Ver Gráfico", command=self.ver_grafico_arquivo_selecionado, width=15).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
+
+    #######editar arquivo ja existente no banco de dados
+    def editar_arquivo_screen(self):
+        """Lista todos os filenames existentes e permite escolher um para editar."""
+        self.clear_screen()
+        self.root.title("Editar Arquivo Salvo")
+
+        frame = tk.Frame(self.root); frame.pack(pady=20)
+
+        tk.Label(frame, text="Buscar:").pack()
+        buscar_var = tk.StringVar()
+        buscar_ent = tk.Entry(frame, textvariable=buscar_var, width=40)
+        buscar_ent.pack()
+
+        lb_frame = tk.Frame(frame); lb_frame.pack(pady=10)
+        self.editar_lb = tk.Listbox(lb_frame, width=80, height=15,
+                                    exportselection=False)
+        self.editar_lb.pack(side="left", fill="both", expand=True)
+        sb = tk.Scrollbar(lb_frame, command=self.editar_lb.yview)
+        sb.pack(side="right", fill="y")
+        self.editar_lb.config(yscrollcommand=sb.set)
+
+        # carrega os nomes
+        self._todos_arquivos = self.db_manager.get_existing_filenames()
+
+        def _refresh(*_):
+            txt = buscar_var.get().lower().strip()
+            self.editar_lb.delete(0, tk.END)
+            for f in self._todos_arquivos:
+                if txt in f.lower():
+                    self.editar_lb.insert(tk.END, f)
+        buscar_var.trace("w", _refresh); _refresh()
+
+        tk.Button(frame, text="Editar Selecionado",
+                  command=self._abrir_editor_metadados).pack(pady=8)
+        tk.Button(frame, text="Voltar", command=self.create_main_menu).pack()
+
+    def _abrir_editor_metadados(self):
+        sel = self.editar_lb.curselection()
+        if not sel:
+            messagebox.showerror("Erro", "Nenhum arquivo escolhido.")
+            return
+        self._filename_edit = self.editar_lb.get(sel[0])
+
+        idnome = self.db_manager.get_idnome_by_filename(self._filename_edit)
+        meta   = self.db_manager.get_all_metadados_for_idnome(idnome)
+        if not meta:
+            messagebox.showerror("Erro", "Metadados não encontrados.")
+            return
+
+        # guarda em atributo para reuso
+        self._meta_dict = meta
+        self._show_meta_editor()
+
+    def _show_meta_editor(self):
+        """Interface simples (listbox + botão ‘Editar’)"""
+        self.clear_screen()
+        self.root.title(f"Edição de Metadados – {self._filename_edit}")
+
+        inv_map = {v: k for k, v in self.db_manager.get_metadados_map().items()}
+
+        frame = tk.Frame(self.root); frame.pack(pady=15, fill="both", expand=True)
+        lb = tk.Listbox(frame, width=90, height=20); lb.pack(side="left", fill="both", expand=True)
+        sb = tk.Scrollbar(frame, command=lb.yview); sb.pack(side="right", fill="y")
+        lb.config(yscrollcommand=sb.set)
+
+        self._meta_keys = list(self._meta_dict.keys())
+        def _render():
+            lb.delete(0, tk.END)
+            for k in self._meta_keys:
+                legivel = inv_map.get(k, k)
+                lb.insert(tk.END, f"{legivel}: {self._meta_dict[k]}")
+        _render()
+
+        def _editar():
+            sel = lb.curselection()
+            if not sel:
+                return
+            idx  = sel[0]
+            chave = self._meta_keys[idx]
+            legivel = inv_map.get(chave, chave)
+
+            win = tk.Toplevel(self.root); win.title(f"Editar {legivel}")
+            tk.Label(win, text=f"{legivel}:").pack()
+            e = tk.Entry(win, width=40); e.pack()
+            e.insert(0, str(self._meta_dict[chave] or ""))
+
+            def _ok():
+                self._meta_dict[chave] = e.get().strip()
+                _render()
+                win.destroy()
+            tk.Button(win, text="OK", command=_ok).pack(pady=4)
+
+        tk.Button(self.root, text="Editar Campo Selecionado", command=_editar).pack(pady=5)
+
+        def _salvar():
+            try:
+                # 1) re-processa o .gds (mesmo caminho de antes)
+                gds_path = os.path.join(resource_path('LUIZ-Teste'), self._filename_edit)
+                if not os.path.isfile(gds_path):
+                    raise FileNotFoundError(gds_path)
+                gds_path = fix_gds(gds_path)
+
+                result = TableProcessor.process_table_data(self.db_manager,
+                                                           self._meta_dict,
+                                                           gds_path)
+                if result is None:
+                    raise RuntimeError("TableProcessor retornou None.")
+                novo_df = result["df"]
+
+                # 2) atualiza banco
+                self.db_manager.replace_file(self._filename_edit,
+                                             self._meta_dict,
+                                             novo_df)
+                messagebox.showinfo("Sucesso", "Arquivo atualizado no banco.")
+                self.create_main_menu()
+            except Exception as e:
+                traceback.print_exc()
+                messagebox.showerror("Erro", f"Falha ao salvar: {e}")
+
+        tk.Button(self.root, text="Salvar Alterações", command=_salvar).pack(pady=8)
+        tk.Button(self.root, text="Cancelar", command=self.create_main_menu).pack()
 
     #  TABELA-RESUMO  (pandastable)
 

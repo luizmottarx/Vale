@@ -1151,6 +1151,58 @@ class DatabaseManager:
         return pd.read_sql_query(query, self.conn, params=(idamostra,))
 
 
+    def replace_file(self, filename: str,
+                           novos_metadados: dict,
+                           novo_df):
+        import numpy as np, traceback
+
+        def conv(v):
+            if isinstance(v, (np.float64, np.float32)):
+                return float(v)
+            if isinstance(v, (np.int64, np.int32)):
+                return int(v)
+            return v
+
+        idnome = self.get_idnome_by_filename(filename)
+        if idnome is None:
+            raise ValueError(f"filename '{filename}' não encontrado.")
+
+        # ------------ 1) MetadadosArquivo -----------------
+        cols_bd = [c[1] for c in self.conn.execute(
+                        "PRAGMA table_info(MetadadosArquivo)")]
+        meta_filtrado = {k: conv(v) for k, v in novos_metadados.items()
+                         if k in cols_bd}
+
+        set_clause = ", ".join([f"{c}=?" for c in meta_filtrado])
+        vals_meta  = list(meta_filtrado.values()) + [idnome]
+
+        # ------------ 2) EnsaiosTriaxiais -----------------
+        ens_cols   = novo_df.columns.tolist()
+        ens_cols_id = ["idnome"] + ens_cols
+        ph         = ", ".join(["?"] * len(ens_cols_id))
+        col_join   = ", ".join(ens_cols_id)
+
+        try:
+            with self.conn:
+                # (1) UPDATE metadados
+                self.conn.execute(f"""
+                    UPDATE MetadadosArquivo
+                       SET {set_clause}
+                     WHERE idnome = ?
+                """, vals_meta)
+
+                # (2) substituir todo o ensaio
+                self.conn.execute(
+                    "DELETE FROM EnsaiosTriaxiais WHERE idnome=?",
+                    (idnome,))
+                for _, row in novo_df.iterrows():
+                    self.conn.execute(f"""
+                        INSERT INTO EnsaiosTriaxiais ({col_join})
+                        VALUES ({ph})
+                    """, [idnome] + [conv(v) for v in row.values])
+        except Exception as e:
+            traceback.print_exc()
+            raise e
     
 import os
 import sys
