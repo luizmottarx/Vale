@@ -23,6 +23,7 @@ import teste1
 import teste2
 import teste3
 import testeBD
+from pandastable import Table, TableModel
 
 
 class InterfaceApp:
@@ -140,18 +141,20 @@ class InterfaceApp:
         frame.pack(pady=50)
 
         if self.user_type == "admin":
-            tk.Button(frame, text="Adicionar Usuário", command=self.add_user_screen, width=30).pack(pady=10)
-            tk.Button(frame, text="Gerenciar Usuários", command=self.manage_users_screen, width=30).pack(pady=10)
+            tk.Button(frame, text="Adicionar Usuário",                  command=self.add_user_screen, width=30).pack(pady=10)
+            tk.Button(frame, text="Gerenciar Usuários",                 command=self.manage_users_screen, width=30).pack(pady=10)
 
-        tk.Button(frame, text="Encontrar Arquivos", command=self.find_files, width=30).pack(pady=10)
-        tk.Button(frame, text="Verificar Ensaio", command=self.verificar_ensaio_screen, width=30).pack(pady=10)
-        tk.Button(frame, text="Ver Arquivos Aprovados", command=self.ver_arquivos_aprovados, width=30).pack(pady=10)
-        tk.Button(frame, text="Ver Arquivos Refugados", command=self.ver_arquivos_refugados, width=30).pack(pady=10)
-        tk.Button(frame, text="Gerar Planilha Cliente", command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
-        tk.Button(frame, text="Encontrar Arquivos Triaxial Cíclico", command=self.open_triaxial_ciclico_window, width=30).pack(pady=10)
-        tk.Button(frame, text="Comparar Arquivos Excel/CSV", command=self.compare_excel_screen, width=30).pack(pady=10)
+        tk.Button(frame, text="Encontrar Arquivos",                     command=self.find_files, width=30).pack(pady=10)
+        tk.Button(frame, text="Verificar Ensaio",                       command=self.verificar_ensaio_screen, width=30).pack(pady=10)
+        tk.Button(frame, text="Ver Arquivos Aprovados",                 command=self.ver_arquivos_aprovados, width=30).pack(pady=10)
+        tk.Button(frame, text="Ver Arquivos Refugados",                 command=self.ver_arquivos_refugados, width=30).pack(pady=10)
+        tk.Button(frame, text="Gerar Planilha Cliente",                 command=self.gerar_planilha_cliente_screen, width=30).pack(pady=10)
+        tk.Button(frame, text="Juntar Arquivos",                        command=self.open_triaxial_ciclico_window, width=30).pack(pady=10)
+        tk.Button(frame, text="Comparar Arquivos Excel/CSV",            command=self.compare_excel_screen, width=30).pack(pady=10)
+        tk.Button(frame, text="Tabela Resumo ",                         command=self.tabela_resumo_amostra, width=30).pack(pady=10)
 
-        tk.Button(frame, text="Sair", command=self.root.quit, width=30).pack(pady=10)
+
+        tk.Button(frame, text="Sair",                                   command=self.root.quit, width=30).pack(pady=10)
 
 
     def open_triaxial_ciclico_window(self):
@@ -189,6 +192,100 @@ class InterfaceApp:
         tk.Button(button_frame, text="Ver Gráfico", command=self.ver_grafico_arquivo_selecionado, width=15).grid(row=0, column=0, padx=10)
         tk.Button(button_frame, text="Voltar ao Menu", command=self.create_main_menu, width=15).grid(row=0, column=1, padx=10)
 
+    #  TABELA-RESUMO  (pandastable)
+
+    def tabela_resumo_amostra(self):
+        """
+        Exibe uma janela com:
+        • Campo de busca (filtro)  
+        • ListBox de amostras salvas  
+        • Botão 'Ver Tabela da Amostra'  
+        Ao clicar, abre a pandastable contendo (ou criando) a tabela-resumo
+        da amostra selecionada.
+        """
+        # 1) obtém todas as amostras existentes
+        amostras = self.db_manager.get_amostras()
+        if not amostras:
+            messagebox.showinfo("Informação", "Nenhuma amostra encontrada no banco.")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("Tabela-Resumo – escolher amostra")
+        win.geometry("400x450")
+
+        # -----------  campo de filtro  -------------
+        tk.Label(win, text="Filtrar amostra:").pack(pady=(10, 0))
+        filtro_var = tk.StringVar()
+        filtro_entry = tk.Entry(win, textvariable=filtro_var, width=40)
+        filtro_entry.pack(pady=5)
+
+        # -----------  listbox de amostras  ---------
+        listbox = tk.Listbox(win, width=45, height=18, exportselection=False)
+        listbox.pack(pady=5, fill="both", expand=True)
+
+        # scrollbar opcional
+        sb = tk.Scrollbar(listbox, orient="vertical", command=listbox.yview)
+        listbox.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+
+        # função para preencher / filtrar a listbox
+        def atualizar_listbox(*_):
+            texto = filtro_var.get().strip().lower()
+            listbox.delete(0, tk.END)
+            for am in amostras:
+                if texto in am.lower():
+                    listbox.insert(tk.END, am)
+
+        filtro_var.trace_add("write", atualizar_listbox)
+        atualizar_listbox()          # 1ª vez – mostra todas
+
+        # -----------  ação de abrir pandastable  ----
+        def abrir_resumo():
+            sel = listbox.curselection()
+            if not sel:
+                messagebox.showerror("Erro", "Selecione uma amostra na lista.")
+                return
+            idamostra = listbox.get(sel[0])
+            win.destroy()            # fecha janela de escolha
+            self._abrir_pandastable_resumo(idamostra)
+
+        tk.Button(win, text="Ver Tabela da Amostra",
+                command=abrir_resumo, width=25).pack(pady=10)
+
+    def _abrir_pandastable_resumo(self, idamostra: str):
+        """
+        Abre a pandastable para a amostra indicada.
+        Permite editar e salvar (upsert) no banco – usa DatabaseManager.
+        """
+        # --- carrega (ou cria vazia) o DataFrame ----------------------
+        df = self.db_manager.get_resumo_dataframe(idamostra)
+        if df.empty:
+            import pandas as pd
+            df = pd.DataFrame(columns=[
+                "nome_arquivo", "cond_moldagem", "metodo_prep", "umidade_final",
+                "p0_kpa", "Gs", "e0", "ec", "ef", "su_pico", "su_final"
+            ])
+
+        # --- janela com pandastable -----------------------------------
+        from pandastable import Table
+        win = tk.Toplevel(self.root)
+        win.title(f"Tabela-Resumo – {idamostra}")
+        frame = tk.Frame(win); frame.pack(fill="both", expand=True)
+        pt = Table(frame, dataframe=df, showtoolbar=True, showstatusbar=True)
+        pt.show()
+
+        # --- botões: Salvar | Exportar | Fechar -----------------------
+        btnf = tk.Frame(win); btnf.pack(pady=5)
+        def salvar():
+            new_df = pt.model.df
+            for _, row in new_df.iterrows():
+                self.db_manager.upsert_resumo_amostra(idamostra, row.to_dict())
+            messagebox.showinfo("Salvo", "Tabela-resumo atualizada no banco.")
+        tk.Button(btnf, text="Salvar no Banco", width=18,
+                command=salvar).pack(side="left", padx=5)
+
+        tk.Button(btnf, text="Fechar", width=18,
+                command=win.destroy).pack(side="left", padx=5)
 
     def ver_grafico_arquivo_selecionado(self):
         selection = self.arquivo_listbox.curselection()
@@ -561,11 +658,45 @@ class InterfaceApp:
 
             # Chama a função para exibir a tela de resultados
             self.show_save_status()  # Alterado de show_results_screen para show_save_status
-
+        
         except Exception as e:
             print(f"Erro ao salvar metadados: {e}")
             traceback.print_exc()
             messagebox.showerror("Erro", f"Falha ao salvar os metadados: {e}")
+
+        try:
+            # amostra que está sendo salva
+            idamostra = self.metadados.get("idamostra")
+
+            # 1) monta o dicionário-linha (adicione/remova campos se quiser)
+            resumo_row = {
+                "nome_arquivo":   os.path.basename(self.file_path),
+
+                # ► campos vindos do 1º bloco de metadados
+                "cond_moldagem":  self.metadados.get("cond_moldagem",  ""),
+                "metodo_prep":    self.metadados.get("metodo_prep",    ""),
+                "umidade_final":  self.metadados.get("w_f",            ""),
+
+                # ► campos calculados no TableProcessor (metadados_parte2)
+                "p0_kpa":   getattr(metadados_parte2, "p0_kpa",   None),
+                "Gs":       getattr(metadados_parte2, "Gs",       None),
+                "e0":       getattr(metadados_parte2, "e0",       None),
+                "ec":       getattr(metadados_parte2, "ec",       None),
+                "ef":       getattr(metadados_parte2, "ef",       None),
+                "su_pico":  getattr(metadados_parte2, "su_pico",  None),
+                "su_final": getattr(metadados_parte2, "su_final", None),
+            }
+
+            # 2) escreve (INSERT ou UPDATE) em ResumoAmostra
+            self.db_manager.upsert_resumo_amostra(idamostra, resumo_row)
+
+        except Exception as err:
+            traceback.print_exc()
+            messagebox.showwarning(
+                "ResumoAmostra",
+                f"Não consegui atualizar a tabela-resumo desta amostra:\n{err}"
+            )    
+
 
     def alterar_status_arquivo(self, filename, novo_status):
         try:

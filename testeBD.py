@@ -473,6 +473,25 @@ class DatabaseManager:
                     )
                 """)
 
+                #  tabela ResumoAmostra
+                self.conn.execute("""
+                    CREATE TABLE IF NOT EXISTS ResumoAmostra (
+                        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                        idamostra  TEXT NOT NULL,
+                        filename   TEXT NOT NULL,          -- <<<< trocado
+                        cond_moldagem TEXT,
+                        metodo_prep   TEXT,
+                        umidade_final TEXT,
+                        p0_kpa     REAL,
+                        Gs         REAL,
+                        e0         REAL,
+                        ec         REAL,
+                        ef         REAL,
+                        su_pico    REAL,
+                        su_final   REAL
+                    )
+                """)
+
         except Exception as e:
             print(f"Erro ao criar tabelas: {e}")
             traceback.print_exc()
@@ -1073,6 +1092,66 @@ class DatabaseManager:
             traceback.print_exc()
 
 
+    def upsert_resumo_amostra(self, idamostra: str, row: dict):
+        campos = [
+            "cond_moldagem","metodo_prep","umidade_final",
+            "p0_kpa","Gs","e0","ec","ef","su_pico","su_final"
+        ]
+
+        cur = self.conn.execute(
+            "SELECT id FROM ResumoAmostra WHERE idamostra=? AND filename=?",
+            (idamostra, row["filename"])
+        )
+        if cur.fetchone():        # --- UPDATE
+            set_sql = ", ".join([f"{c}=?" for c in campos])
+            valores = [row.get(c) for c in campos] + [idamostra, row["filename"]]
+            self.conn.execute(
+                f"UPDATE ResumoAmostra SET {set_sql} WHERE idamostra=? AND filename=?",
+                valores
+            )
+        else:                     # --- INSERT
+            cols = "(idamostra, filename, " + ", ".join(campos) + ")"
+            placeholders = ", ".join(["?"] * (2+len(campos)))
+            valores = [idamostra, row["filename"]] + [row.get(c) for c in campos]
+            self.conn.execute(
+                f"INSERT INTO ResumoAmostra {cols} VALUES ({placeholders})",
+                valores
+            )
+        self.conn.commit()
+
+
+    def get_resumo_dataframe(self, idamostra: str):
+        """
+        Retorna um DataFrame já contendo uma linha por Cp.filename da amostra.
+        Se ainda não houver dados em ResumoAmostra, as colunas de resumo
+        vêm vazias – o usuário preenche no pandastable.
+        """
+        query = """
+            SELECT
+                c.filename,
+                c.status,
+                COALESCE(r.cond_moldagem, '') AS cond_moldagem,
+                COALESCE(r.metodo_prep,   '') AS metodo_prep,
+                COALESCE(r.umidade_final, '') AS umidade_final,
+                COALESCE(r.p0_kpa,        '') AS p0_kpa,
+                COALESCE(r.Gs,            '') AS Gs,
+                COALESCE(r.e0,            '') AS e0,
+                COALESCE(r.ec,            '') AS ec,
+                COALESCE(r.ef,            '') AS ef,
+                COALESCE(r.su_pico,       '') AS su_pico,
+                COALESCE(r.su_final,      '') AS su_final
+            FROM Cp  AS c
+            LEFT JOIN ResumoAmostra AS r
+                ON r.idamostra = c.idamostra
+                AND r.filename  = c.filename
+            WHERE c.idamostra = ?
+            ORDER BY c.filename
+        """
+        import pandas as pd
+        return pd.read_sql_query(query, self.conn, params=(idamostra,))
+
+
+    
 import os
 import sys
 
