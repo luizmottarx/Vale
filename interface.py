@@ -537,7 +537,7 @@ class InterfaceApp:
 
         index = selection[0]
         self.selected_file = self.file_listbox.get(index)
-        directory = r'C:\Users\lgv_v\Documents\LUIZ-Teste'
+        directory = resource_path("LUIZ-Teste")
         file_path = os.path.join(directory, self.selected_file)
         file_path = fix_gds(file_path)
         self.file_path = file_path
