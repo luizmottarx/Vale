@@ -385,8 +385,9 @@ class InterfaceApp:
         if df.empty:
             import pandas as pd
             df = pd.DataFrame(columns=[
-                "nome_arquivo", "cond_moldagem", "metodo_prep", "umidade_final",
-                "p0_kpa", "Gs", "e0", "ec", "ef", "su_pico", "su_final"
+            "nome_arquivo","cond_moldagem","metodo_prep","umidade_final",
+            "p0_A","p0_B","Gs","e0","ecA","ecB","ef",
+            "su_pico_A","su_pico_B","su_final_A","su_final_B"
             ])
 
         # --- janela com pandastable -----------------------------------
@@ -765,60 +766,112 @@ class InterfaceApp:
         self.metadados = final_dict
 
 
-    def save_metadata(self):
+# ───────── dentro da classe InterfaceApp ──────────
+    def save_metadata(self) -> None:
+        import os, traceback
+        from pathlib import Path
+        from tkinter import messagebox
+
+        # ------------------------------------------------------------------ helpers
+        def safe_div(num: float, den: float, default: float = 0.0) -> float:
+            try:
+                return num / den if den else default
+            except Exception:
+                return default
+        # --------------------------------------------------------------------------
+
         try:
-            result = TableProcessor.process_table_data(self.db_manager, self.metadados, self.file_path)
+            # 1) processa o arquivo .gds ------------------------------------------------
+            result = TableProcessor.process_table_data(
+                self.db_manager,
+                self.metadados,
+                self.file_path
+            )
             if result is None:
-                raise ValueError("Falha ao processar os dados do arquivo. Verifique se o arquivo está correto.")
+                messagebox.showerror(
+                    "Erro",
+                    "Falha ao processar o arquivo .gds – verifique o layout ou o cabeçalho."
+                )
+                return
 
-            df_to_save = result['df']
-            metadados_parte2 = result['metadados_parte2']
+            df_to_save       = result["df"]
+            meta2            = result["metadados_parte2"]
 
-            self.db_manager.save_to_database(self.metadados, df_to_save, filename=os.path.basename(self.file_path))
+            # 2) grava no banco (MetadadosArquivo, EnsaiosTriaxiais, etc.) -------------
+            self.db_manager.save_to_database(
+                self.metadados,
+                df_to_save,
+                filename=os.path.basename(self.file_path)
+            )
 
-            # Exibe a messagebox de sucesso
-            messagebox.showinfo("Sucesso", "Metadados salvos com sucesso!")
+            # 3) calcula os valores que estavam zerados --------------------------------
+            cis_ini = int(self.metadados.get("_cis_inicial", 8))
+            cis_fim = int(self.metadados.get("_cis_final",   8))
 
-            # Chama a função para exibir a tela de resultados
-            self.show_save_status()  # Alterado de show_results_screen para show_save_status
-        
-        except Exception as e:
-            print(f"Erro ao salvar metadados: {e}")
-            traceback.print_exc()
-            messagebox.showerror("Erro", f"Falha ao salvar os metadados: {e}")
+            df_cis = df_to_save[
+                (df_to_save["stage_no"] >= cis_ini) &
+                (df_to_save["stage_no"] <= cis_fim)
+            ]
 
-        try:
-            # amostra que está sendo salva
-            idamostra = self.metadados.get("idamostra")
+            if df_cis.empty:           # não há dados no intervalo
+                p0_A = p0_B = su_pico_A = su_pico_B = su_fin_A = su_fin_B = None
+            else:
+                p0_A = float(df_cis["eff_camb_A"].iloc[0])
+                p0_B = float(df_cis["eff_camb_B"].iloc[0])
 
-            # 1) monta o dicionário-linha (adicione/remova campos se quiser)
+                su_fin_A  = float(df_cis["su_A"].iloc[-1])
+                su_fin_B  = float(df_cis["su_B"].iloc[-1])
+
+                su_pico_A = su_fin_A                       # último su_A
+                su_pico_B = float(df_cis["su_B"].max())    # máximo su_B
+
+            # 4) prepara a linha-resumo -------------------------------------------------
+            idamostra        = self.metadados.get("idamostra", "")
+            if not idamostra:
+                raise ValueError("Metadados sem 'idamostra'.")
+
+            file_name_only   = Path(self.file_path).name     # ‘CP 11.gds’, por ex.
+
             resumo_row = {
-                "nome_arquivo":   os.path.basename(self.file_path),
+            "filename":         file_name_only,
+            "status":           self.db_manager.get_status_cp(self.file_path),
+            "tipo_ensaio":      self.db_manager.get_id_tipo_ensaio(self.metadados.get("tipo")),
+            "cond_moldagem":    self.metadados.get("cond_moldagem", ""),
+            "metodo_prep":      self.metadados.get("metodo_prep",   ""),
+            "umidade_final":    self.metadados.get("umidade_final", ""),
 
-                # ► campos vindos do 1º bloco de metadados
-                "cond_moldagem":  self.metadados.get("cond_moldagem",  ""),
-                "metodo_prep":    self.metadados.get("metodo_prep",    ""),
-                "umidade_final":  self.metadados.get("w_f",            ""),
+            # ─── calculados ───
+            "p0_A":   p0_A,
+            "p0_B":   p0_B,
+            "Gs":     getattr(meta2, "spec_grav", None),
+            "e0":     getattr(meta2, "init_void_ratio", None),
+            "ecA":    getattr(meta2, "post_cons_void_A", None),
+            "ecB":    getattr(meta2, "post_cons_void_B", None),
+            "ef":     getattr(meta2, "void_ratio_f", None),
 
-                # ► campos calculados no TableProcessor (metadados_parte2)
-                "p0_kpa":   getattr(metadados_parte2, "p0_kpa",   None),
-                "Gs":       getattr(metadados_parte2, "Gs",       None),
-                "e0":       getattr(metadados_parte2, "e0",       None),
-                "ec":       getattr(metadados_parte2, "ec",       None),
-                "ef":       getattr(metadados_parte2, "ef",       None),
-                "su_pico":  getattr(metadados_parte2, "su_pico",  None),
-                "su_final": getattr(metadados_parte2, "su_final", None),
-            }
+            # valores absolutos de su
+            "su_pico_A":   su_pico_A,
+            "su_pico_B":   su_pico_B,
+            "su_final_A":  su_fin_A,
+            "su_final_B":  su_fin_B,
 
-            # 2) escreve (INSERT ou UPDATE) em ResumoAmostra
+            # razões su / p'0
+            "su_p0_pico_A":  safe_div(su_pico_A, p0_A),
+            "su_p0_pico_B":  safe_div(su_pico_B, p0_B),
+            "su_p0_final_A": safe_div(su_fin_A,  p0_A),
+            "su_p0_final_B": safe_div(su_fin_B,  p0_B),
+        }
+
+            # 5) grava / atualiza ResumoAmostra ----------------------------------------
             self.db_manager.upsert_resumo_amostra(idamostra, resumo_row)
 
-        except Exception as err:
+            # 6) feedback ao usuário ---------------------------------------------------
+            messagebox.showinfo("Sucesso", "Metadados e Resumo salvos com êxito!")
+            self.show_save_status()       # exibe a tela de confirmação
+
+        except Exception as exc:
             traceback.print_exc()
-            messagebox.showwarning(
-                "ResumoAmostra",
-                f"Não consegui atualizar a tabela-resumo desta amostra:\n{err}"
-            )    
+            messagebox.showerror("Erro ao salvar", str(exc))
 
 
     def alterar_status_arquivo(self, filename, novo_status):
@@ -1747,10 +1800,10 @@ class InterfaceApp:
             for arq, linhas in data_by_file.items():
                 meta = self.db_manager.get_metadata_for_file(arq)
                 try:
-                    cis_ini = int(float(meta.get("Cisalhamento Inicial", 8)))
-                    cis_fim = int(float(meta.get("Cisalhamento Final",   11)))
+                    cis_ini = int(float(meta.get("Cisalhamento Inicial", 0)))
+                    cis_fim = int(float(meta.get("Cisalhamento Final",   0)))
                 except (ValueError, TypeError):
-                    cis_ini, cis_fim = 8, 11
+                    cis_ini, cis_fim = 0, 0
 
                 df = pd.DataFrame(linhas)
 

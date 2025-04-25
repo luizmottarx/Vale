@@ -60,7 +60,14 @@ class METADADOS_PARTE2:
           - init_dry_mass, v_0, vol_solid, v_w_f, h_init: calculados fora
         """
         self.df = df.copy()
-
+        for col in [
+            "eff_camb_A", "eff_camb_B",  # pressões eficazes
+            "su_A", "su_B",              # resistências não-drenadas
+            "void_ratio_A", "void_ratio_B",
+            "back_vol",                  # usada em vários cálculos
+        ]:
+            if col not in self.df.columns:
+                self.df[col] = 0.0  # placeholder – serão recalculadas depois   
         # ---------------------------------------------------------------------
         # 1) Ler do dicionário de metadados
         # ---------------------------------------------------------------------
@@ -266,6 +273,39 @@ class METADADOS_PARTE2:
         else:
             self.camb_p_A0 = 0.0
             self.camb_p_B0 = 0.0
+
+        # ────────────────────────────────────────────────────────────────────
+        #   Cálculos para a Tabela-Resumo
+        # ────────────────────────────────────────────────────────────────────
+        cis_df = self.df[
+            (self.df["stage_no"] >= self.CisalhamentoInicial) &
+            (self.df["stage_no"] <= self.CisalhamentoFinal)
+        ].copy()
+
+        # p'0  (primeiro eff_camb no estágio de cisalhamento)
+        if not cis_df.empty:
+            self.p0_A = safe_float_conversion(cis_df["eff_camb_A"].iloc[0], 0.0)
+            self.p0_B = safe_float_conversion(cis_df["eff_camb_B"].iloc[0], 0.0)
+
+            # su_A e su_B já existem no DataFrame (foram criadas no TableProcessor)
+            self.su_final_A = safe_float_conversion(cis_df["su_A"].iloc[-1], 0.0)
+            self.su_final_B = safe_float_conversion(cis_df["su_B"].iloc[-1], 0.0)
+
+            # “pico”  ➜  A = último valor, B = máximo valor
+            self.su_pico_A = self.su_final_A                    # último A
+            self.su_pico_B = safe_float_conversion(cis_df["su_B"].max(), 0.0)
+
+        else:   # não há dados no intervalo
+            self.p0_A = self.p0_B = 0.0
+            self.su_pico_A = self.su_pico_B = 0.0
+            self.su_final_A = self.su_final_B = 0.0
+
+        # Relações su/p'0  (com divisão segura)
+        self.su_p0_pico_A  = safe_divide(self.su_pico_A,  self.p0_A, 0.0)
+        self.su_p0_pico_B  = safe_divide(self.su_pico_B,  self.p0_B, 0.0)
+        self.su_p0_final_A = safe_divide(self.su_final_A, self.p0_A, 0.0)
+        self.su_p0_final_B = safe_divide(self.su_final_B, self.p0_B, 0.0)
+
 
     def print_attributes(self):
         """
@@ -496,6 +536,11 @@ class TableProcessor:
                 safe_divide(df['vol_A'], df['height'].replace(0, np.nan), 0.0)
             ) * 1e-6
 
+            # ------------------------------------------------------------------
+            for col in ["eff_camb_A", "eff_camb_B", "su_A", "su_B"]:
+                if col not in df.columns:
+                    df[col] = 0.0           # placeholder – serão recalculadas depois
+            # ------------------------------------------------------------------
             # 7) Instanciar METADADOS_PARTE2 e recalcular metadados
             metadados_parte2 = METADADOS_PARTE2(
                 df=df,
@@ -686,6 +731,16 @@ class TableProcessor:
                 "avg_mean_stress","avg_eff_stress_A","avg_eff_stress_B","b_val","excessPWP","su_A","su_B",
                 "nqp_B","nqp_A","m_A","m_B","du_kpa"
             ]
+
+            # Atributos críticos para resumo
+            atributos_resumo = [
+                "p0_A", "p0_B", "su_p0_pico_A", "su_p0_pico_B",
+                "su_p0_final_A", "su_p0_final_B", "Gs",
+                "init_void_ratio", "post_cons_void_A", "post_cons_void_B", "void_ratio_f"
+            ]
+            for attr in atributos_resumo:
+                metadados[attr] = getattr(metadados_parte2, attr, None)
+
 
             # 10) Garante que as colunas existam
             for c in columns_to_save:

@@ -813,6 +813,6 @@ criar uma tabela resumo usando o pandastable ou outra biblioteca, 'Treeview'
 
 adicionar funcionalidade de conseguir editar arquivos que ja foram salvos, editar os metadados que ja foram salvos e recalcular substituindo no banco de dados com os novos valores dos metadados.
 
-verificar junção de arquivos, calculos incorretos de void_ratio , alterar nome ciclico do botao e o nome do arquivo salvo, para filename ou junção de nomes idcontrato/idamostra/idtipoensaio/Cp
+verificar junção de arquivos, calculos incorretos de void_ratio , alterar nome ciclico do botao e o nome do arquivo salvo, para filename ou junção de nomes idcontrato/idamostra/idtipoensaio/Cp.
 
 criar funcionalidade de exportação das tabelas do banco de dados, o usuario consegue escolher qual tabela, e usar filtros para os dados apartir das colunas e exportar em arquivo csv.

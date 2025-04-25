@@ -354,6 +354,12 @@ class DatabaseManager:
                         cons_void_vol_B REAL,
                         post_cons_void_B REAL,
                         consolidated_area_B REAL,
+                        "p0_A" REAL,
+                        "p0_B" REAL,
+                        "su_p0_pico_A" REAL,
+                        "su_p0_pico_B" REAL,
+                        "su_p0_final_A" REAL,
+                        "su_p0_final_B" REAL,
 
                         FOREIGN KEY (idnome) REFERENCES Cp(idnome)
                     )
@@ -476,19 +482,34 @@ class DatabaseManager:
                 #  tabela ResumoAmostra
                 self.conn.execute("""
                     CREATE TABLE IF NOT EXISTS ResumoAmostra (
-                        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                        idamostra  TEXT NOT NULL,
-                        filename   TEXT NOT NULL,          -- <<<< trocado
-                        cond_moldagem TEXT,
-                        metodo_prep   TEXT,
-                        umidade_final TEXT,
-                        p0_kpa     REAL,
-                        Gs         REAL,
-                        e0         REAL,
-                        ec         REAL,
-                        ef         REAL,
-                        su_pico    REAL,
-                        su_final   REAL
+                        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                        idamostra        TEXT NOT NULL,
+                        filename         TEXT NOT NULL,
+                        status           TEXT,               
+                        tipo_ensaio      TEXT,              
+                        cond_moldagem    TEXT,
+                        metodo_prep      TEXT,
+                        umidade_final    TEXT,
+
+                        p0_A             REAL,
+                        p0_B             REAL,
+                        Gs               REAL,
+                        e0               REAL,
+                        ecA              REAL,
+                        ecB              REAL,
+                        ef               REAL,
+
+                        su_pico_A        REAL,
+                        su_pico_B        REAL,
+                        su_final_A       REAL,
+                        su_final_B       REAL,
+
+                        su_p0_pico_A     REAL,
+                        su_p0_pico_B     REAL,
+                        su_p0_final_A    REAL,
+                        su_p0_final_B    REAL,
+
+                        UNIQUE (idamostra, filename)
                     )
                 """)
 
@@ -770,6 +791,35 @@ class DatabaseManager:
         except Exception as e:
             traceback.print_exc()
             raise e
+    # ─────────────────────────────────────────────────────────────
+    # Aceita descrição (ex.: 'TIR_S') ou id ('17', 17) e devolve o id
+    # ─────────────────────────────────────────────────────────────
+    def get_id_tipo_ensaio(self, valor) -> int | None:
+        """
+        • Se 'valor' já for int → devolve após confirmar que existe  
+        • Se for str numérica → converte p/ int e confirma  
+        • Se for descrição ('TIR_S', 'ADTIR_B' …) → procura na tabela  
+        Retorna None se não achar.
+        """
+        try:
+            # 1) valor já é int ou str-numérica  --------------------
+            if isinstance(valor, int) or (isinstance(valor, str) and valor.isdigit()):
+                idnum = int(valor)
+                return idnum if self.is_tipo_ensaio_valid(idnum) else None
+
+            # 2) valor é descrição ----------------------------------
+            cur = self.conn.execute(
+                "SELECT idtipoensaio FROM TipoEnsaio WHERE tipo = ? LIMIT 1",
+                (str(valor).strip(),)
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+
+        except Exception as e:
+            print(f"Erro get_id_tipo_ensaio({valor!r}): {e}")
+            traceback.print_exc()
+            return None
+
 
     def get_idnome_by_filename(self, filename):
         """
@@ -1024,6 +1074,13 @@ class DatabaseManager:
                 "pore_press_c",         # self.pore_press_c
                 "camb_p_A0",            # self.camb_p_A0
                 "camb_p_B0",            # self.camb_p_B0
+
+                "p0_A",
+                "p0_B",
+                "su_p0_pico_A",
+                "su_p0_pico_B",
+                "su_p0_final_A",
+                "su_p0_final_B",
             ]
 
 
@@ -1094,9 +1151,12 @@ class DatabaseManager:
 
     def upsert_resumo_amostra(self, idamostra: str, row: dict):
         campos = [
-            "cond_moldagem","metodo_prep","umidade_final",
-            "p0_kpa","Gs","e0","ec","ef","su_pico","su_final"
-        ]
+        "status","tipo_ensaio","cond_moldagem", "metodo_prep", "umidade_final",
+        "p0_A", "p0_B", "Gs", "e0", "ecA", "ecB", "ef",
+        "su_pico_A", "su_pico_B", "su_final_A", "su_final_B",
+        "su_p0_pico_A", "su_p0_pico_B",
+        "su_p0_final_A", "su_p0_final_B"
+    ]
 
         cur = self.conn.execute(
             "SELECT id FROM ResumoAmostra WHERE idamostra=? AND filename=?",
@@ -1119,6 +1179,20 @@ class DatabaseManager:
             )
         self.conn.commit()
 
+    def get_status_cp(self, file_path_or_name: str) -> str | None:
+        """
+        Retorna o campo 'status' da tabela Cp para o filename indicado.
+        Se não encontrar, devolve None.
+        """
+        import os
+        fname = os.path.basename(file_path_or_name)
+
+        cur = self.conn.execute(
+            "SELECT status FROM Cp WHERE filename = ? LIMIT 1",
+            (fname,)
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
 
     def get_resumo_dataframe(self, idamostra: str):
         """
@@ -1130,23 +1204,27 @@ class DatabaseManager:
             SELECT
                 c.filename,
                 c.status,
+                COALESCE(r.tipo_ensaio,'')    AS tipo_ensaio,
                 COALESCE(r.cond_moldagem, '') AS cond_moldagem,
                 COALESCE(r.metodo_prep,   '') AS metodo_prep,
                 COALESCE(r.umidade_final, '') AS umidade_final,
-                COALESCE(r.p0_kpa,        '') AS p0_kpa,
-                COALESCE(r.Gs,            '') AS Gs,
-                COALESCE(r.e0,            '') AS e0,
-                COALESCE(r.ec,            '') AS ec,
-                COALESCE(r.ef,            '') AS ef,
-                COALESCE(r.su_pico,       '') AS su_pico,
-                COALESCE(r.su_final,      '') AS su_final
-            FROM Cp  AS c
+                COALESCE(r.p0_A, '') AS p0_A,
+                COALESCE(r.p0_B, '') AS p0_B,
+                COALESCE(r.Gs, '') AS Gs,
+                COALESCE(r.e0, '') AS e0,
+                COALESCE(r.ecA, '') AS ecA,
+                COALESCE(r.ecB, '') AS ecB,
+                COALESCE(r.ef, '') AS ef,
+                COALESCE(r.su_p0_pico_A, '') AS su_p0_pico_A,
+                COALESCE(r.su_p0_pico_B, '') AS su_p0_pico_B,
+                COALESCE(r.su_p0_final_A, '') AS su_p0_final_A,
+                COALESCE(r.su_p0_final_B, '') AS su_p0_final_B
+            FROM Cp AS c
             LEFT JOIN ResumoAmostra AS r
-                ON r.idamostra = c.idamostra
-                AND r.filename  = c.filename
+                ON r.idamostra = c.idamostra AND r.filename = c.filename
             WHERE c.idamostra = ?
             ORDER BY c.filename
-        """
+            """
         import pandas as pd
         return pd.read_sql_query(query, self.conn, params=(idamostra,))
 
